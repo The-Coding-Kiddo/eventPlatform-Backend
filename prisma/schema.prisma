@@ -1,5 +1,3 @@
-// prisma/schema.prisma
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,22 +8,21 @@ datasource db {
 
 // ─────────────────────────────────────────────────────────────────
 // USER MODEL
-// Matches the "Core user shape expected" from the handoff document
 // ─────────────────────────────────────────────────────────────────
 model User {
-  id               String   @id @default(uuid()) // Backend generates unique IDs
+  id               String   @id @default(uuid())
   name             String   
   email            String   @unique
   password         String   // Hashed securely (not sent to frontend)
-  role             Role     @default(citizen) // <--- Fixed: lowercase to match the enum
-  institution      String?  // Only populated for institution_admins
+  role             Role     @default(citizen)
+  institution      String?
   
   // Relationships (Linking Users to Events)
   savedEvents      Event[]  @relation("SavedEvents")
   registeredEvents Event[]  @relation("RegisteredEvents")
   
   // PostgreSQL supports saving basic arrays directly
-  subscriptions    String[] // Array of category names
+  subscriptions    String[]
   
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
@@ -39,23 +36,22 @@ enum Role {
 
 // ─────────────────────────────────────────────────────────────────
 // EVENT MODEL
-// Matches the "Event shape expected" from the handoff document
 // ─────────────────────────────────────────────────────────────────
 model Event {
   id               String      @id @default(uuid())
   title            String
   category         String
-  date             String      // Stored as 'YYYY-MM-DD' as frontend requested
-  time             String      // Stored as 'HH:MM'
+  date             String     
+  time             String      
   location         String
   venue            String
-  institution      String      // The owner of the event
+  institution      String      
   description      String      @db.Text // Text type for longer content
   price            Float       @default(0)
   capacity         Int
   attendees        Int         @default(0)
   tags             String[]
-  image            String?     // Optional URL or path
+  image            String?     
   status           EventStatus @default(draft)
   
   // Inverse relationships back to the User table
