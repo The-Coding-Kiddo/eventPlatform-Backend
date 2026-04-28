@@ -8,6 +8,7 @@ import {
   Param,
   UseGuards,
   ForbiddenException,
+  Query,
 } from '@nestjs/common';
 import { EventsService } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
@@ -21,8 +22,28 @@ export class EventsController {
   constructor(private readonly eventsService: EventsService) {}
 
   @Get()
-  async getPublicEvents() {
-    return this.eventsService.getPublicEvents();
+  async getPublicEvents(
+    @Query('category') category?: string,
+    @Query('city') city?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.eventsService.getPublicEvents({ category, city, search });
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('all')
+  async getAllEvents(
+    @Query('institutionId') institutionId?: string,
+    @CurrentUser() user?: JwtPayload,
+  ) {
+    this.verifyInstitutionAdmin(user);
+    
+    // If institution admin, restrict to their own institution
+    if (user?.role === 'institution_admin') {
+      return this.eventsService.fetchAllEvents(user.institution);
+    }
+    
+    return this.eventsService.fetchAllEvents(institutionId);
   }
 
   @Get(':id')
@@ -64,10 +85,11 @@ export class EventsController {
     @CurrentUser() user?: JwtPayload,
   ) {
     this.verifyInstitutionAdmin(user);
+    const institution = user?.role === 'super_admin' ? 'super_admin' : (user?.institution ?? '');
     return this.eventsService.updateEvent(
       id,
       updateEventDto,
-      user?.institution ?? '',
+      institution,
     );
   }
 
@@ -78,7 +100,7 @@ export class EventsController {
     return this.eventsService.deleteEvent(id, user?.institution ?? '', role);
   }
 
-  // ── Phase 4: Citizen Endpoints ──
+  // ── Citizen Endpoints ──
 
   @UseGuards(JwtAuthGuard)
   @Post(':id/save')

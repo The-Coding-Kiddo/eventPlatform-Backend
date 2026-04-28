@@ -12,11 +12,29 @@ import { UpdateEventDto } from './dto/update-event.dto';
 export class EventsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getPublicEvents() {
+  async getPublicEvents(filters: any = {}) {
+    const { category, city, search } = filters;
+    const where: any = { status: 'approved' };
+
+    if (category) where.category = category;
+    if (city) where.location = { contains: city, mode: 'insensitive' };
+    if (search) {
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
     return this.prisma.event.findMany({
-      where: { status: 'approved' },
+      where,
       orderBy: { date: 'asc' },
     });
+  }
+
+  async fetchAllEvents(institutionId?: string) {
+    const where: any = {};
+    if (institutionId) where.institution = institutionId;
+    return this.prisma.event.findMany({ where, orderBy: { createdAt: 'desc' } });
   }
 
   async getEventById(id: string) {
@@ -42,9 +60,12 @@ export class EventsService {
   async updateEvent(id: string, data: UpdateEventDto, institution: string) {
     const event = await this.prisma.event.findUnique({ where: { id } });
     if (!event) throw new NotFoundException('Event not found');
-    if (event.institution !== institution)
+    
+    // Allow super admin to edit or institution admin to edit their own
+    if (institution !== 'super_admin' && event.institution !== institution)
       throw new ForbiddenException('Unauthorized');
-    if (event.status === 'approved')
+      
+    if (event.status === 'approved' && institution !== 'super_admin')
       throw new ForbiddenException('Cannot edit approved events');
 
     return this.prisma.event.update({ where: { id }, data });

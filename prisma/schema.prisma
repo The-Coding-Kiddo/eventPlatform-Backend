@@ -23,6 +23,7 @@ model User {
   
   // PostgreSQL supports saving basic arrays directly
   subscriptions    String[]
+  suspended        Boolean  @default(false)
   
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
