@@ -1,3 +1,4 @@
+import { PartialType } from '@nestjs/swagger';
 import { CreateEventDto } from './create-event.dto';
 
-export type UpdateEventDto = Partial<CreateEventDto>;
+export class UpdateEventDto extends PartialType(CreateEventDto) {}

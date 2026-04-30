@@ -45,14 +45,14 @@ export class EventsService {
 
   async submitEvent(data: CreateEventDto) {
     const event = await this.prisma.event.create({
-      data: { ...data, status: 'pending' },
+      data: { ...data, status: 'pending', institution: data.institution ?? '' },
     });
     return { event };
   }
 
   async saveDraft(data: CreateEventDto) {
     const event = await this.prisma.event.create({
-      data: { ...data, status: 'draft' },
+      data: { ...data, status: 'draft', institution: data.institution ?? '' },
     });
     return { event };
   }

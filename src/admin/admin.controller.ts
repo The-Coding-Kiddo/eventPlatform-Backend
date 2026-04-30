@@ -67,6 +67,16 @@ export class AdminController {
     return this.adminService.getUsers();
   }
 
+  @Patch('users/:id')
+  async updateUser(
+    @Param('id') id: string,
+    @Body() body: { status: 'active' | 'suspended' },
+    @CurrentUser() user?: JwtPayload,
+  ) {
+    this.verifySuperAdmin(user);
+    return this.adminService.updateUser(id, body);
+  }
+
   // ── Institutions ──
 
   @Get('institutions')

@@ -5,10 +5,12 @@ import { AuthController } from './auth.controller';
 
 @Module({
   imports: [
-    JwtModule.register({
+    JwtModule.registerAsync({
       global: true,
-      secret: process.env.JWT_SECRET,
-      signOptions: { expiresIn: '7d' }, // Users stay logged in for 7 days
+      useFactory: () => ({
+        secret: process.env.JWT_SECRET,
+        signOptions: { expiresIn: '7d' }, // Users stay logged in for 7 days
+      }),
     }),
   ],
   controllers: [AuthController],

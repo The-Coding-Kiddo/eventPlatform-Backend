@@ -69,3 +69,23 @@ enum EventStatus {
   approved
   rejected
 }
+
+// ─────────────────────────────────────────────────────────────────
+// NOTIFICATION MODEL
+// ─────────────────────────────────────────────────────────────────
+model Notification {
+  id             String   @id @default(uuid())
+  type           String   // e.g. new_event | event_approved | event_rejected | subscription
+  title          String
+  message        String
+  read           Boolean  @default(false)
+
+  // Optional target scoping — all null = broadcast to everyone
+  userId         String?  // target a specific user
+  forRole        String?  // target all users of a role
+  forCategory    String?  // target citizens subscribed to this category
+  forInstitution String?  // target admins of this institution
+  eventId        String?  // reference to related event (optional)
+
+  createdAt      DateTime @default(now())
+}

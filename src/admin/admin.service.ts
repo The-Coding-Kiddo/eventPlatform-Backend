@@ -177,6 +177,17 @@ export class AdminService {
     return users.map(({ password: _, ...u }) => u);
   }
 
+  async updateUser(id: string, data: { status: 'active' | 'suspended' }) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) throw new NotFoundException('User not found.');
+    const updated = await this.prisma.user.update({
+      where: { id },
+      data: { suspended: data.status === 'suspended' },
+    });
+    const { password: _, ...u } = updated;
+    return u;
+  }
+
   // ── Institutions ─────────────────────────────────────────────────
 
   async getInstitutions() {

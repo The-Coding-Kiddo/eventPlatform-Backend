@@ -58,9 +58,13 @@ export class EventsController {
     @CurrentUser() user?: JwtPayload,
   ) {
     this.verifyInstitutionAdmin(user);
+    const institution = user?.role === 'super_admin' ? (createEventDto.institution || '') : (user?.institution || '');
+    if (user?.role === 'institution_admin' && !institution) {
+      throw new ForbiddenException('Institution admin must have an institution assigned.');
+    }
     return this.eventsService.submitEvent({
       ...createEventDto,
-      institution: user?.institution ?? '',
+      institution,
     });
   }
 
@@ -71,9 +75,13 @@ export class EventsController {
     @CurrentUser() user?: JwtPayload,
   ) {
     this.verifyInstitutionAdmin(user);
+    const institution = user?.role === 'super_admin' ? (createEventDto.institution || '') : (user?.institution || '');
+    if (user?.role === 'institution_admin' && !institution) {
+      throw new ForbiddenException('Institution admin must have an institution assigned.');
+    }
     return this.eventsService.saveDraft({
       ...createEventDto,
-      institution: user?.institution ?? '',
+      institution,
     });
   }
 
