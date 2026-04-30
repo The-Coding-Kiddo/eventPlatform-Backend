@@ -49,7 +49,7 @@ export class NotificationsController {
   @Post('read-all')
   async markAllRead(@CurrentUser() user?: JwtPayload) {
     if (!user) throw new ForbiddenException('Not authenticated');
-    return this.notificationsService.markAllRead(user.sub, user.role);
+    return this.notificationsService.markAllRead(user.sub, user.role, user.institution);
   }
 
   @Delete(':id')

@@ -80,6 +80,8 @@ export class EventsService {
         throw new ForbiddenException('Unauthorized');
       if (event.status === 'approved')
         throw new ForbiddenException('Cannot delete approved events');
+      if (event.status === 'pending')
+        throw new ForbiddenException('Cannot delete events pending moderation');
     }
 
     await this.prisma.event.delete({ where: { id } });
@@ -89,6 +91,9 @@ export class EventsService {
   // ── Citizen Interactions ──
 
   async saveEvent(eventId: string, userId: string) {
+    const event = await this.prisma.event.findUnique({ where: { id: eventId } });
+    if (!event) throw new NotFoundException('Event not found');
+
     await this.prisma.user.update({
       where: { id: userId },
       data: { savedEvents: { connect: { id: eventId } } },
