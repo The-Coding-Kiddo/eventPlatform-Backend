@@ -16,11 +16,15 @@ import type { UpdateEventDto } from './dto/update-event.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { JwtPayload } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/user.decorator';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 
+@ApiTags('Events')
 @Controller('events')
 export class EventsController {
   constructor(private readonly eventsService: EventsService) {}
 
+  @ApiOperation({ summary: 'Get public approved events' })
+  @ApiResponse({ status: 200, description: 'List of events' })
   @Get()
   async getPublicEvents(
     @Query('category') category?: string,
@@ -30,6 +34,9 @@ export class EventsController {
     return this.eventsService.getPublicEvents({ category, city, search });
   }
 
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all events (Admin only)' })
+  @ApiResponse({ status: 200, description: 'List of institution events' })
   @UseGuards(JwtAuthGuard)
   @Get('all')
   async getAllEvents(
@@ -46,11 +53,14 @@ export class EventsController {
     return this.eventsService.fetchAllEvents(institutionId);
   }
 
+  @ApiOperation({ summary: 'Get specific event by ID' })
   @Get(':id')
   async getEventById(@Param('id') id: string) {
     return this.eventsService.getEventById(id);
   }
 
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Submit an event for moderation (pending)' })
   @UseGuards(JwtAuthGuard)
   @Post()
   async submitEvent(
@@ -68,6 +78,8 @@ export class EventsController {
     });
   }
 
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Save an event as draft' })
   @UseGuards(JwtAuthGuard)
   @Post('draft')
   async saveDraft(
@@ -85,6 +97,8 @@ export class EventsController {
     });
   }
 
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update an owned event' })
   @UseGuards(JwtAuthGuard)
   @Put(':id')
   async updateEvent(
@@ -101,6 +115,8 @@ export class EventsController {
     );
   }
 
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete an owned draft/rejected event' })
   @UseGuards(JwtAuthGuard)
   @Delete(':id')
   async deleteEvent(@Param('id') id: string, @CurrentUser() user?: JwtPayload) {
@@ -110,18 +126,24 @@ export class EventsController {
 
   // ── Citizen Endpoints ──
 
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Bookmark an event' })
   @UseGuards(JwtAuthGuard)
   @Post(':id/save')
   async saveEvent(@Param('id') id: string, @CurrentUser() user?: JwtPayload) {
     return this.eventsService.saveEvent(id, this.getUserId(user));
   }
 
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Remove bookmark from an event' })
   @UseGuards(JwtAuthGuard)
   @Delete(':id/save')
   async unsaveEvent(@Param('id') id: string, @CurrentUser() user?: JwtPayload) {
     return this.eventsService.unsaveEvent(id, this.getUserId(user));
   }
 
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Register for an event' })
   @UseGuards(JwtAuthGuard)
   @Post(':id/register')
   async registerForEvent(
@@ -131,6 +153,8 @@ export class EventsController {
     return this.eventsService.registerForEvent(id, this.getUserId(user));
   }
 
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Cancel event registration' })
   @UseGuards(JwtAuthGuard)
   @Delete(':id/register')
   async cancelRegistration(

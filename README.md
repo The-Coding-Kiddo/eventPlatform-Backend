@@ -29,7 +29,16 @@ _The backend is now running at `http://localhost:3000`._
 
 ---
 
-## 2. Frontend Setup
+## 2. API Documentation
+
+We provide two ways to explore the backend API:
+
+- **Interactive Swagger UI**: Once the backend is running, navigate to `http://localhost:3000/api/docs` in your browser. This provides an interactive OpenAPI interface where you can view schemas, required payloads, and test endpoints directly.
+- **Static Documentation**: See the [`API.md`](./API.md) file in this repository for a high-level overview of the architecture, RBAC model, and endpoint tables.
+
+---
+
+## 3. Frontend Setup
 
 **A. Environment Variables**
 Copy the example environment file to point the frontend to your local API:
@@ -49,7 +58,7 @@ _The frontend is now running at `http://localhost:5175`._
 
 ---
 
-## 3. Test Accounts
+## 4. Test Accounts
 
 The backend seed script automatically generates demo accounts. Once both servers are running, you can log in to the frontend using:
 

@@ -10,11 +10,15 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { JwtPayload } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/user.decorator';
 import { UpdateSubscriptionsDto } from '../events/dto/update-subscriptions.dto';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 
+@ApiTags('Users')
+@ApiBearerAuth()
 @Controller('user')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  @ApiOperation({ summary: 'Update citizen category subscriptions' })
   @UseGuards(JwtAuthGuard)
   @Put('subscriptions')
   async updateSubscriptions(
