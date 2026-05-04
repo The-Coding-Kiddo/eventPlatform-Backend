@@ -31,7 +31,10 @@ export class JwtAuthGuard implements CanActivate {
     }
 
     try {
-      const secret = process.env.JWT_SECRET ?? '';
+      const secret = process.env.JWT_SECRET;
+      if (!secret) {
+        throw new UnauthorizedException('JWT_SECRET not configured');
+      }
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const payload = await this.jwtService.verifyAsync(token, { secret });
       request.user = payload as JwtPayload;
