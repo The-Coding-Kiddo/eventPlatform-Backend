@@ -107,11 +107,12 @@ export class EventsController {
     @CurrentUser() user?: JwtPayload,
   ) {
     this.verifyInstitutionAdmin(user);
-    const institution = user?.role === 'super_admin' ? 'super_admin' : (user?.institution ?? '');
+    const institution = user?.institution ?? '';
     return this.eventsService.updateEvent(
       id,
       updateEventDto,
       institution,
+      user?.role ?? 'citizen',
     );
   }
 

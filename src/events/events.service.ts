@@ -57,15 +57,15 @@ export class EventsService {
     return { event };
   }
 
-  async updateEvent(id: string, data: UpdateEventDto, institution: string) {
+  async updateEvent(id: string, data: UpdateEventDto, institution: string, role: string) {
     const event = await this.prisma.event.findUnique({ where: { id } });
     if (!event) throw new NotFoundException('Event not found');
     
-    // Allow super admin to edit or institution admin to edit their own
-    if (institution !== 'super_admin' && event.institution !== institution)
+    // Allow super admin to edit any event or institution admin to edit their own
+    if (role !== 'super_admin' && event.institution !== institution)
       throw new ForbiddenException('Unauthorized');
       
-    if (event.status === 'approved' && institution !== 'super_admin')
+    if (event.status === 'approved' && role !== 'super_admin')
       throw new ForbiddenException('Cannot edit approved events');
 
     return this.prisma.event.update({ where: { id }, data });
