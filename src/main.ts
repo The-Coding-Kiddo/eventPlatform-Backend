@@ -6,8 +6,25 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { json, urlencoded } from 'express';
 
 async function bootstrap() {
+  // Validate JWT_SECRET at startup
+  if (!process.env.JWT_SECRET) {
+    throw new Error('CRITICAL: JWT_SECRET environment variable is not set. Application cannot start.');
+  }
+
   const app = await NestFactory.create(AppModule);
-  app.enableCors();
+  
+  // Configure CORS: only allow requests from frontend domain
+  const allowedOrigins = [
+    process.env.FRONTEND_URL || 'http://localhost:5175',
+    'http://localhost:5175',
+  ];
+  
+  app.enableCors({
+    origin: allowedOrigins,
+    credentials: true,
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    allowedHeaders: 'Content-Type,Authorization',
+  });
 
   app.use(json({ limit: '50mb' }));
   app.use(urlencoded({ extended: true, limit: '50mb' }));
