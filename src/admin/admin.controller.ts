@@ -5,7 +5,6 @@ import {
   Param,
   Body,
   UseGuards,
-  ForbiddenException,
   Post,
   Query,
 } from '@nestjs/common';
@@ -13,8 +12,6 @@ import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
-import type { JwtPayload } from '../auth/jwt-auth.guard';
-import { CurrentUser } from '../auth/user.decorator';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
@@ -44,9 +41,7 @@ export class AdminController {
   async approveEvent(
     @Param('id') id: string,
     @Body() body: { note?: string },
-    @CurrentUser() user?: JwtPayload,
   ) {
-    this.verifySuperAdmin(user);
     return this.adminService.approveEventInQueue(id, body.note);
   }
 
@@ -56,9 +51,7 @@ export class AdminController {
   async rejectEvent(
     @Param('id') id: string,
     @Body() body: { note?: string },
-    @CurrentUser() user?: JwtPayload,
   ) {
-    this.verifySuperAdmin(user);
     return this.adminService.rejectEventInQueue(id, body.note);
   }
 
@@ -66,8 +59,7 @@ export class AdminController {
 
   @ApiOperation({ summary: 'Get platform analytics' })
   @Get('analytics')
-  async getAnalytics(@CurrentUser() user?: JwtPayload) {
-    this.verifySuperAdmin(user);
+  async getAnalytics() {
     return this.adminService.getAnalytics();
   }
 
@@ -85,9 +77,7 @@ export class AdminController {
   async updateUser(
     @Param('id') id: string,
     @Body() body: { status: 'active' | 'suspended' },
-    @CurrentUser() user?: JwtPayload,
   ) {
-    this.verifySuperAdmin(user);
     return this.adminService.updateUser(id, body);
   }
 
@@ -103,9 +93,7 @@ export class AdminController {
   @Patch('institutions/:id/suspend')
   async suspendInstitution(
     @Param('id') id: string,
-    @CurrentUser() user?: JwtPayload,
   ) {
-    this.verifySuperAdmin(user);
     return this.adminService.suspendInstitution(id);
   }
 
@@ -113,9 +101,7 @@ export class AdminController {
   @Patch('institutions/:id/unsuspend')
   async unsuspendInstitution(
     @Param('id') id: string,
-    @CurrentUser() user?: JwtPayload,
   ) {
-    this.verifySuperAdmin(user);
     return this.adminService.unsuspendInstitution(id);
   }
 

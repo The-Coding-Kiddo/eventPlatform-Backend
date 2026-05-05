@@ -1,3 +1,4 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
