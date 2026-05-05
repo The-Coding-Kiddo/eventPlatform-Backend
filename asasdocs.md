@@ -1,84 +1,85 @@
-# EventPlatform Enterprise Architecture Documentation
+# 🏗️ EventPlatform Enterprise Architecture Documentation
 
-This document outlines the core architectural phases implemented to elevate the EventPlatform backend to an enterprise-grade system.
+This document serves as the technical blueprint for the architectural elevation of the EventPlatform backend. It details the transition from a monolithic "rookie" codebase to a decoupled, secure, and observable enterprise system.
 
 ---
 
-## 🛡️ Phase 1: Robust Security (RBAC)
-**Goal:** Centralized and declarative access control.
+## 🛡️ Phase 1: Declarative Security (RBAC)
+**Goal:** Replace manual imperative checks with a centralized, metadata-driven authorization engine.
 
-### Implementation
-- **Roles Decorator:** Created `@Roles()` to attach metadata to routes.
-- **Roles Guard:** A global logic engine that reads route metadata and compares it against the user's JWT role.
-- **Controller Refactor:** Removed manual `if/else` role checks from `EventsController`, `AdminController`, and `NotificationsController`.
+### Technical Implementation
+- **Custom Decorators:** Created a `@Roles(...role: Role[])` decorator using the `Reflector` API to attach permission metadata to route handlers.
+- **Global Auth Guard:** Implemented a `RolesGuard` that intercepts every request. It extracts metadata via `this.reflector.get<Role[]>('roles', context.getHandler())` and compares it against the `decoded.role` in the JWT payload.
+- **Controller Decoupling:** Stripped `EventsController`, `AdminController`, and `NotificationsController` of `if/else` role logic, making them "pure" business logic handlers.
 
-### Benefits
-- **Auditability:** Security permissions are visible at the top of every method.
-- **Consistency:** Ensures 403 Forbidden responses are handled identically across the app.
-- **Reduced Human Error:** Prevents developers from forgetting to call security checks in new functions.
+### Enterprise Benefits
+- **Auditability:** Security posture is visible at the code level via decorators.
+- **DRY Principle:** Security logic is written once and applied universally.
 
 ---
 
 ## 📋 Phase 2: Standardized API Protocol
-**Goal:** Predictable communication between Frontend and Backend.
+**Goal:** Enforce a strict contract between Frontend and Backend using the "Envelope Pattern."
 
-### Implementation
-- **Transform Interceptor:** Automatically wraps every successful response in a standard structure: `{ success: true, data: ..., timestamp: ... }`.
-- **Global Exception Filter:** Catches all errors and converts them into a structured JSON format: `{ success: false, statusCode: 400, message: "...", path: "..." }`.
+### Technical Implementation
+- **Transform Interceptor:** Leverages RXJS `map` operator within a NestJS `NestInterceptor`. Every outgoing response is wrapped in a `Response<T>` interface: `{ success: true, data: T, timestamp: string }`.
+- **Global Exception Filter:** Implemented a `@Catch()` filter that overrides the default NestJS error handler. It catches `HttpException` and raw `Error` objects, sanitizing them into a consistent structure to prevent "Ugly Errors" and internal stack trace leakage.
 
-### Benefits
-- **Frontend Stability:** The client-side team always knows where to find data.
-- **Security:** Prevents internal database errors or stack traces from being exposed to the public.
-- **Graceful Error Handling:** Provides clear error messages for better user experience.
-
----
-
-## 👁️ Phase 3: Observability (Structured Logging)
-**Goal:** Production-ready monitoring and debugging.
-
-### Implementation
-- **Winston Integration:** Replaced the default NestJS console logger.
-- **Environment Formatting:** 
-  - **Development:** Colorized, pretty-printed output for easy reading.
-  - **Production:** Compact JSON output for automated log parsing (ELK/Datadog/CloudWatch).
-
-### Benefits
-- **Searchability:** JSON logs allow for instant filtering by user, request ID, or error type.
-- **Persistence:** Ready to be piped into professional log management systems.
-- **Context:** Allows for attaching metadata to logs without breaking the format.
+### Enterprise Benefits
+- **Frontend Predictability:** The client-side team consumes a stable contract, reducing "undefined" errors.
+- **Security:** Prevents leaking database schema or internal logic via raw error messages.
 
 ---
 
-## ⚖️ Phase 4: Scalability (Pagination)
-**Goal:** High-performance data retrieval for large datasets.
+## 👁️ Phase 3: High-Fidelity Observability
+**Goal:** Moving from `console.log` to structured, searchable, and persistent telemetry.
 
-### Implementation
-- **Pagination DTO:** A reusable object for `skip` (offset) and `take` (limit) parameters.
-- **Database Optimization:** Updated Prisma queries to use the `skip` and `take` parameters, ensuring the server only processes a slice of the data.
-- **Total Counts:** Every paginated list now returns a `total` count for building frontend pagination bars.
+### Technical Implementation
+- **Winston Integration:** Integrated `nest-winston` as the primary logging driver.
+- **Environment-Aware Transports:**
+  - **Development:** Uses `nestLike` formatting with ANSI colors and timestamps for readability.
+  - **Production:** Configured for `json()` format to support automated ingestion into ELK stacks or CloudWatch.
+- **Global Injection:** Replaced the default `LoggerService` in `main.ts` so that framework-level events (Bootstrap, Routes mapping) are also captured.
 
-### Benefits
-- **Memory Safety:** Prevents the server from crashing when dealing with thousands of records.
-- **Lower Latency:** Queries are significantly faster when only fetching 10-20 items.
-- **Bandwidth Efficiency:** Reduces the amount of data transferred over the network.
-
----
-
-## 🛡️ Phase 5: Performance & Security (Rate Limiting)
-**Goal:** DDoS protection and system stability.
-
-### Implementation
-- **Throttler Integration:** Implemented `@nestjs/throttler` globally.
-- **Standard Limits:** Set a global limit of 60 requests per minute per IP address.
-- **Global Guard:** Registered the `ThrottlerGuard` in `AppModule` to protect all endpoints by default.
-
-### Benefits
-- **Abuse Prevention:** Protects against brute-force attacks on login and registration.
-- **Fair Usage:** Ensures a single high-traffic user doesn't degrade performance for others.
-- **System Resilience:** Acts as a safety valve against bot-driven traffic spikes.
+### Enterprise Benefits
+- **Searchability:** JSON logs allow dev-ops to filter logs by `requestId` or `level` instantly.
+- **Accountability:** Every system event is timestamped and categorized.
 
 ---
 
-## 🚀 Future Phases
-- **Phase 6:** Healthchecks & Monitoring (Prometheus)
-- **Phase 7:** Automated Testing (Unit & E2E)
+## ⚖️ Phase 4: Scalability & Resource Management
+**Goal:** Prevent memory exhaustion and database lock-ups during high-traffic discovery.
+
+### Technical Implementation
+- **Pagination DTO:** Created a reusable `PaginationDto` with `Type` transformation to ensure `skip` and `take` are cast to integers.
+- **Prisma Optimization:** Updated service methods to use Prisma's `skip` (offset) and `take` (limit) parameters.
+- **Atomic Counts:** Every list query is now a `Promise.all` execution that returns both the data slice and the total record count for frontend pagination UI.
+
+### Enterprise Benefits
+- **Performance:** Constant-time response regardless of total database size.
+- **Bandwidth:** Drastic reduction in payload size for mobile and web clients.
+
+---
+
+## 🛡️ Phase 5: Adaptive Rate Limiting
+**Goal:** Mitigating brute-force attacks and resource abuse at the network edge.
+
+### Technical Implementation
+- **Throttler Guard:** Integrated `@nestjs/throttler` as a global guard in `AppModule`.
+- **Dynamic Limits:** Set a global baseline of 60 requests per minute (TTL: 60s).
+- **Security Headers:** Automatically adds `X-RateLimit-Limit` and `X-RateLimit-Remaining` to responses, allowing the frontend to proactively slow down requests.
+
+---
+
+## 👥 Phase 6: Logistics & Data Access (Attendee Management)
+**Goal:** Empowering institution admins with secure access to participant manifests.
+
+### Technical Implementation
+- **Scoped Relationship Fetching:** Added `getAttendees` method using Prisma's relation selection. It fetches the `User[]` array connected to an `Event`.
+- **Permission Scoping:** Implemented cross-check logic: `if (role !== 'super_admin' && event.institution !== institution)`. This ensures multi-tenant isolation where one institution cannot view another's private data.
+
+---
+
+## 🚀 Future Roadmap
+- **Phase 7:** Healthcheck API (Terminus) for Kubernetes/Container orchestration.
+- **Phase 8:** Automated Test Suite (Jest & Supertest) for regression prevention.
