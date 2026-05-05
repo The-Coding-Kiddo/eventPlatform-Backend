@@ -5,7 +5,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { json, urlencoded } from 'express';
 import { WinstonModule } from 'nest-winston';
-import { winstonConfig } from './common/logger/winston.config';
+import { winstonLogger } from './common/logger/winston.config';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 
@@ -16,7 +16,7 @@ async function bootstrap() {
   }
 
   const app = await NestFactory.create(AppModule, {
-    logger: WinstonModule.createLogger(winstonConfig),
+    logger: WinstonModule.createLogger(winstonLogger as any),
   });
   
   // Configure CORS: only allow requests from frontend domain

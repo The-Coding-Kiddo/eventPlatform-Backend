@@ -6,6 +6,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { winstonLogger } from '../logger/winston.config';
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
@@ -32,9 +33,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       message: typeof message === 'object' ? (message as any).message || message : message,
     };
 
-    // Log the error (Winston will pick this up automatically)
-    console.error(
-      `[${request.method}] ${request.url} - ${status} - ${JSON.stringify(message)}`,
+    winstonLogger.error(
+      `${request.method} ${request.url} - ${status} - ${JSON.stringify(message)}`,
     );
 
     response.status(status).json(errorResponse);
