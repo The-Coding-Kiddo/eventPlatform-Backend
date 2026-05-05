@@ -170,6 +170,18 @@ export class EventsController {
     return this.eventsService.cancelRegistration(id, this.getUserId(user));
   }
 
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get attendee list for an event (Admin only)' })
+  @Roles('institution_admin', 'super_admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Get(':id/attendees')
+  async getAttendees(
+    @Param('id') id: string,
+    @CurrentUser() user?: JwtPayload,
+  ) {
+    return this.eventsService.getAttendees(id, user?.institution ?? '', user?.role ?? 'citizen');
+  }
+
   private getUserId(user?: JwtPayload): string {
     if (!user) throw new ForbiddenException('User session not found.');
     return user.sub;

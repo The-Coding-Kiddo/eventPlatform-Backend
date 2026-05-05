@@ -213,4 +213,31 @@ export class EventsService {
       return { success: true };
     });
   }
+
+  async getAttendees(id: string, institution: string, role: string) {
+    const event = await this.prisma.event.findUnique({
+      where: { id },
+      select: {
+        institution: true,
+        registeredUsers: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    if (!event) throw new NotFoundException('Event not found');
+
+    // Security: Only allow if super_admin OR if it's the admin's own institution
+    if (role !== 'super_admin' && event.institution !== institution) {
+      throw new ForbiddenException('You do not have permission to view attendees for this event.');
+    }
+
+    return event.registeredUsers;
+  }
 }
