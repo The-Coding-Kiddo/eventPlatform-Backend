@@ -1,20 +1,66 @@
-import { NestFactory, Reflector } from '@nestjs/core';
-import { ValidationPipe, ClassSerializerInterceptor } from '@nestjs/common';
+import 'dotenv/config';
+import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { ValidationPipe } from '@nestjs/common';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { json, urlencoded } from 'express';
+import { WinstonModule } from 'nest-winston';
+import { winstonConfig } from './common/logger/winston.config';
+import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // Validate JWT_SECRET at startup
+  if (!process.env.JWT_SECRET) {
+    throw new Error('CRITICAL: JWT_SECRET environment variable is not set. Application cannot start.');
+  }
 
-  app.enableCors();
-  app.setGlobalPrefix('api');
+  const app = await NestFactory.create(AppModule, {
+    logger: WinstonModule.createLogger(winstonConfig),
+  });
+  
+  // Configure CORS: only allow requests from frontend domain
+  const allowedOrigins = [
+    process.env.FRONTEND_URL || 'http://localhost:5175',
+    'http://localhost:5175',
+  ];
+  
+  app.enableCors({
+    origin: allowedOrigins,
+    credentials: true,
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    allowedHeaders: 'Content-Type,Authorization',
+  });
+
+  app.use(json({ limit: '50mb' }));
+  app.use(urlencoded({ extended: true, limit: '50mb' }));
 
   app.useGlobalPipes(
-    new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }),
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      forbidNonWhitelisted: true, // Throws an error if extra fields are sent
+    }),
   );
-  app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
 
-  const port = process.env.PORT ?? 3000;
-  await app.listen(port);
-  console.log(`🚀 Server running at http://localhost:${port}/api`);
+  // Standardize response shape
+  app.useGlobalInterceptors(new TransformInterceptor());
+
+  // Standardize error responses
+  app.useGlobalFilters(new AllExceptionsFilter());
+
+  // --- Swagger Setup ---
+  const config = new DocumentBuilder()
+    .setTitle('Event Platform API')
+    .setDescription('The core API for the Event Management Platform')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+
+  const documentFactory = () => SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, documentFactory);
+  // ---------------------
+
+  await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap();

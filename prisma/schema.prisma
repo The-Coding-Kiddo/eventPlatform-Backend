@@ -1,0 +1,91 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────────────────────────
+// USER MODEL
+// ─────────────────────────────────────────────────────────────────
+model User {
+  id               String   @id @default(uuid())
+  name             String   
+  email            String   @unique
+  password         String   // Hashed securely (not sent to frontend)
+  role             Role     @default(citizen)
+  institution      String?
+  
+  // Relationships (Linking Users to Events)
+  savedEvents      Event[]  @relation("SavedEvents")
+  registeredEvents Event[]  @relation("RegisteredEvents")
+  
+  // PostgreSQL supports saving basic arrays directly
+  subscriptions    String[]
+  suspended        Boolean  @default(false)
+  
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+enum Role {
+  citizen
+  institution_admin
+  super_admin
+}
+
+// ─────────────────────────────────────────────────────────────────
+// EVENT MODEL
+// ─────────────────────────────────────────────────────────────────
+model Event {
+  id               String      @id @default(uuid())
+  title            String
+  category         String
+  date             String     
+  time             String      
+  location         String
+  venue            String
+  institution      String      
+  description      String      @db.Text // Text type for longer content
+  price            Float       @default(0)
+  capacity         Int
+  attendees        Int         @default(0)
+  tags             String[]
+  image            String?     
+  status           EventStatus @default(draft)
+  
+  // Inverse relationships back to the User table
+  savedByUsers     User[]      @relation("SavedEvents")
+  registeredUsers  User[]      @relation("RegisteredEvents")
+
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+}
+
+enum EventStatus {
+  draft
+  pending
+  approved
+  rejected
+}
+
+// ─────────────────────────────────────────────────────────────────
+// NOTIFICATION MODEL
+// ─────────────────────────────────────────────────────────────────
+model Notification {
+  id             String   @id @default(uuid())
+  type           String   // e.g. new_event | event_approved | event_rejected | subscription
+  title          String
+  message        String
+  read           Boolean  @default(false)
+
+  // Optional target scoping — all null = broadcast to everyone
+  userId         String?  // target a specific user
+  forRole        String?  // target all users of a role
+  forCategory    String?  // target citizens subscribed to this category
+  forInstitution String?  // target admins of this institution
+  eventId        String?  // reference to related event (optional)
+
+  createdAt      DateTime @default(now())
+}

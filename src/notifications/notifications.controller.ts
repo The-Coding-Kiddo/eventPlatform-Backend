@@ -1,29 +1,64 @@
-import { Controller, Get, Patch, Param, ParseIntPipe, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  UseGuards,
+  ForbiddenException,
+} from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { User } from '../users/entities/user.entity';
+import { CreateNotificationDto } from './dto/create-notification.dto';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import type { JwtPayload } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../auth/user.decorator';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 
+@ApiTags('Notifications')
+@ApiBearerAuth()
 @Controller('notifications')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
-  // GET /notifications — full list for current user
+  @ApiOperation({ summary: 'Get targeted notifications for the current user' })
   @Get()
-  findAll(@CurrentUser() user: User) {
-    return this.notificationsService.findAll(user);
+  async getNotifications(@CurrentUser() user?: JwtPayload) {
+    return this.notificationsService.findForUser(
+      user!.sub,
+      user!.role,
+      user!.institution,
+    );
   }
 
-  // PATCH /notifications/read-all — mark all as read
-  @Patch('read-all')
-  markAllRead(@CurrentUser() user: User) {
-    return this.notificationsService.markAllRead(user);
+  @ApiOperation({ summary: 'Manually dispatch a system broadcast (Super Admin only)' })
+  @Roles('super_admin')
+  @Post()
+  async createNotification(
+    @Body() createNotificationDto: CreateNotificationDto,
+  ) {
+    return this.notificationsService.create(createNotificationDto);
   }
 
-  // PATCH /notifications/:id/read — mark one as read
+  @ApiOperation({ summary: 'Mark a single notification as read' })
   @Patch(':id/read')
-  markOneRead(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: User) {
-    return this.notificationsService.markOneRead(id, user);
+  async markRead(@Param('id') id: string) {
+    return this.notificationsService.markRead(id);
+  }
+
+  @ApiOperation({ summary: "Mark all of the user's notifications as read" })
+  @Post('read-all')
+  async markAllRead(@CurrentUser() user?: JwtPayload) {
+    return this.notificationsService.markAllRead(user!.sub, user!.role, user!.institution);
+  }
+
+  @ApiOperation({ summary: 'Delete a notification' })
+  @Delete(':id')
+  async deleteNotification(@Param('id') id: string) {
+    return this.notificationsService.remove(id);
   }
 }

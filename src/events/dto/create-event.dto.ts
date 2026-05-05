@@ -1,49 +1,72 @@
-import { IsString, IsNumber, IsOptional, IsArray, IsEnum, Min } from 'class-validator';
-import { EventStatus } from '../entities/event.entity';
+import {
+  IsString,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsArray,
+  Min,
+} from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateEventDto {
+  @ApiProperty()
   @IsString()
-  title: string;
+  @IsNotEmpty()
+  title!: string;
 
+  @ApiProperty()
   @IsString()
-  category: string;
+  @IsNotEmpty()
+  description!: string;
 
+  @ApiProperty()
   @IsString()
-  date: string;
+  @IsNotEmpty()
+  category!: string;
 
+  @ApiProperty()
   @IsString()
-  time: string;
+  @IsNotEmpty()
+  date!: string;
 
+  @ApiProperty()
   @IsString()
-  location: string;
+  @IsNotEmpty()
+  time!: string;
 
+  @ApiProperty()
   @IsString()
-  @IsOptional()
-  venue?: string;
+  @IsNotEmpty()
+  location!: string;
 
+  @ApiProperty()
   @IsString()
-  description: string;
+  @IsNotEmpty()
+  venue!: string;
 
+  @ApiProperty()
   @IsNumber()
-  @IsOptional()
   @Min(0)
-  price?: number;
+  price!: number;
 
+  @ApiProperty()
   @IsNumber()
-  @IsOptional()
-  @Min(0)
-  capacity?: number;
+  @Min(1)
+  capacity!: number;
 
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  image?: string;
+
+  @ApiPropertyOptional()
   @IsArray()
   @IsString({ each: true })
   @IsOptional()
   tags?: string[];
 
+  @ApiPropertyOptional()
   @IsString()
   @IsOptional()
-  image?: string;
-
-  @IsEnum(EventStatus)
-  @IsOptional()
-  status?: EventStatus;
+  institution?: string;
 }

@@ -1,40 +1,125 @@
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { UsersService } from '../users/users.service';
-import { LoginDto } from './dto/login.dto';
-import { RegisterDto } from './dto/register.dto';
 
 @Injectable()
 export class AuthService {
   constructor(
-    private usersService: UsersService,
+    private prisma: PrismaService,
     private jwtService: JwtService,
   ) {}
 
-  async register(dto: RegisterDto) {
-    const existing = await this.usersService.findByEmail(dto.email);
-    if (existing) throw new ConflictException('Email already in use');
+  async register(name: string, email: string, password: string) {
+    const existingUser = await this.prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      throw new ConflictException('An account with this email already exists.');
+    }
 
-    const hashed = await bcrypt.hash(dto.password, 10);
-    const user = await this.usersService.create({ ...dto, password: hashed });
-    const token = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role });
-    return { access_token: token, user: await this.usersService.buildUserResponse(user) };
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = await this.prisma.user.create({
+      data: { name, email, password: hashedPassword, role: 'citizen' },
+    });
+
+    const { password: _, ...userWithoutPassword } = user;
+    return { user: userWithoutPassword };
   }
 
-  async login(dto: LoginDto) {
-    const user = await this.usersService.findByEmail(dto.email);
+  async login(email: string, pass: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      include: {
+        savedEvents: { select: { id: true } },
+        registeredEvents: { select: { id: true } },
+      },
+    });
     if (!user) throw new UnauthorizedException('Invalid credentials');
 
-    const valid = await bcrypt.compare(dto.password, user.password);
-    if (!valid) throw new UnauthorizedException('Invalid credentials');
+    const isPasswordValid = await bcrypt.compare(pass, user.password);
+    if (!isPasswordValid) throw new UnauthorizedException('Invalid credentials');
 
-    const token = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role });
-    return { access_token: token, user: await this.usersService.buildUserResponse(user) };
+    // Include institution in JWT so controllers can use it without a DB lookup
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      institution: user.institution ?? undefined,
+    };
+    const token = await this.jwtService.signAsync(payload);
+
+    const {
+      password: _,
+      savedEvents,
+      registeredEvents,
+      ...userWithoutPassword
+    } = user;
+
+    return {
+      token,
+      user: {
+        ...userWithoutPassword,
+        savedEvents: savedEvents.map((e) => e.id),
+        registeredEvents: registeredEvents.map((e) => e.id),
+      },
+    };
   }
 
-  async getMe(userId: number) {
-    const user = await this.usersService.findById(userId);
-    return this.usersService.buildUserResponse(user);
+  /** Restore session — returns full user object from DB using the JWT sub. */
+  async getMe(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        savedEvents: { select: { id: true } },
+        registeredEvents: { select: { id: true } },
+      },
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    const { password: _, savedEvents, registeredEvents, ...userWithoutPassword } = user;
+    return {
+      ...userWithoutPassword,
+      savedEvents: savedEvents.map((e) => e.id),
+      registeredEvents: registeredEvents.map((e) => e.id),
+    };
+  }
+
+  /**
+   * Provision a new institution_admin account.
+   * Only callable by super_admin (enforced in controller).
+   */
+  async provision(
+    name: string,
+    email: string,
+    password: string,
+    institution: string,
+  ) {
+    const existingUser = await this.prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      throw new ConflictException('An account with this email already exists.');
+    }
+
+    if (!institution?.trim()) {
+      throw new ForbiddenException('Institution name is required.');
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = await this.prisma.user.create({
+      data: {
+        name,
+        email,
+        password: hashedPassword,
+        role: 'institution_admin',
+        institution,
+      },
+    });
+
+    const { password: _, ...userWithoutPassword } = user;
+    return { user: userWithoutPassword };
   }
 }
