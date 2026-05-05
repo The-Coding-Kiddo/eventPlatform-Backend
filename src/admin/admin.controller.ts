@@ -11,15 +11,19 @@ import {
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 import type { JwtPayload } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/user.decorator';
 import { UpdateStatusDto } from './dto/update-status.dto';
+import { PaginationDto } from '../common/dto/pagination.dto';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 
 @ApiTags('Administration')
 @ApiBearerAuth()
+@Roles('super_admin')
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('admin')
-@UseGuards(JwtAuthGuard)
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
@@ -28,11 +32,10 @@ export class AdminController {
   @ApiOperation({ summary: 'Get moderation queue' })
   @Get('moderation')
   async getModerationQueue(
+    @Query() pagination: PaginationDto,
     @Query('status') status?: string,
-    @CurrentUser() user?: JwtPayload,
   ) {
-    this.verifySuperAdmin(user);
-    return this.adminService.getModerationQueue(status);
+    return this.adminService.getModerationQueue(status, pagination);
   }
 
   @ApiOperation({ summary: 'Approve an event in moderation' })
@@ -72,9 +75,8 @@ export class AdminController {
 
   @ApiOperation({ summary: 'List all users' })
   @Get('users')
-  async getUsers(@CurrentUser() user?: JwtPayload) {
-    this.verifySuperAdmin(user);
-    return this.adminService.getUsers();
+  async getUsers(@Query() pagination: PaginationDto) {
+    return this.adminService.getUsers(pagination);
   }
 
   @ApiOperation({ summary: 'Update a user status (suspend/activate)' })
@@ -93,9 +95,8 @@ export class AdminController {
 
   @ApiOperation({ summary: 'List all institutions' })
   @Get('institutions')
-  async getInstitutions(@CurrentUser() user?: JwtPayload) {
-    this.verifySuperAdmin(user);
-    return this.adminService.getInstitutions();
+  async getInstitutions(@Query() pagination: PaginationDto) {
+    return this.adminService.getInstitutions(pagination);
   }
 
   @ApiOperation({ summary: 'Suspend an institution' })
@@ -120,29 +121,12 @@ export class AdminController {
 
   // ── Legacy / Fallback ──
 
-  @ApiOperation({ summary: 'Legacy: Get pending events directly' })
-  @Get('events/pending')
-  async getPendingEvents(@CurrentUser() user?: JwtPayload) {
-    this.verifySuperAdmin(user);
-    return this.adminService.getPendingEvents();
-  }
-
   @ApiOperation({ summary: 'Legacy: Update event status directly' })
   @Patch('events/:id/status')
   async updateEventStatus(
     @Param('id') id: string,
     @Body() body: UpdateStatusDto,
-    @CurrentUser() user?: JwtPayload,
   ) {
-    this.verifySuperAdmin(user);
     return this.adminService.updateEventStatus(id, body);
-  }
-
-  private verifySuperAdmin(user?: JwtPayload): void {
-    if (!user || user.role !== 'super_admin') {
-      throw new ForbiddenException(
-        'Access denied. Super Admin privileges required.',
-      );
-    }
   }
 }

@@ -12,6 +12,8 @@ import {
 import { NotificationsService } from './notifications.service';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 import type { JwtPayload } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/user.decorator';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -19,30 +21,26 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 @ApiTags('Notifications')
 @ApiBearerAuth()
 @Controller('notifications')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
   @ApiOperation({ summary: 'Get targeted notifications for the current user' })
   @Get()
   async getNotifications(@CurrentUser() user?: JwtPayload) {
-    if (!user) throw new ForbiddenException('Not authenticated');
     return this.notificationsService.findForUser(
-      user.sub,
-      user.role,
-      user.institution,
+      user!.sub,
+      user!.role,
+      user!.institution,
     );
   }
 
   @ApiOperation({ summary: 'Manually dispatch a system broadcast (Super Admin only)' })
+  @Roles('super_admin')
   @Post()
   async createNotification(
     @Body() createNotificationDto: CreateNotificationDto,
-    @CurrentUser() user?: JwtPayload,
   ) {
-    if (!user || user.role !== 'super_admin') {
-      throw new ForbiddenException('Only super admins can create system notifications manually');
-    }
     return this.notificationsService.create(createNotificationDto);
   }
 
@@ -55,8 +53,7 @@ export class NotificationsController {
   @ApiOperation({ summary: "Mark all of the user's notifications as read" })
   @Post('read-all')
   async markAllRead(@CurrentUser() user?: JwtPayload) {
-    if (!user) throw new ForbiddenException('Not authenticated');
-    return this.notificationsService.markAllRead(user.sub, user.role, user.institution);
+    return this.notificationsService.markAllRead(user!.sub, user!.role, user!.institution);
   }
 
   @ApiOperation({ summary: 'Delete a notification' })

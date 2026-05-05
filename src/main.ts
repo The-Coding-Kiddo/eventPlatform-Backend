@@ -4,6 +4,10 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { json, urlencoded } from 'express';
+import { WinstonModule } from 'nest-winston';
+import { winstonConfig } from './common/logger/winston.config';
+import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 
 async function bootstrap() {
   // Validate JWT_SECRET at startup
@@ -11,7 +15,9 @@ async function bootstrap() {
     throw new Error('CRITICAL: JWT_SECRET environment variable is not set. Application cannot start.');
   }
 
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    logger: WinstonModule.createLogger(winstonConfig),
+  });
   
   // Configure CORS: only allow requests from frontend domain
   const allowedOrigins = [
@@ -33,8 +39,15 @@ async function bootstrap() {
     new ValidationPipe({
       whitelist: true,
       transform: true,
+      forbidNonWhitelisted: true, // Throws an error if extra fields are sent
     }),
   );
+
+  // Standardize response shape
+  app.useGlobalInterceptors(new TransformInterceptor());
+
+  // Standardize error responses
+  app.useGlobalFilters(new AllExceptionsFilter());
 
   // --- Swagger Setup ---
   const config = new DocumentBuilder()

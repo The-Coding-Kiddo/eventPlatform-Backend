@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateStatusDto } from './dto/update-status.dto';
+import { PaginationDto } from '../common/dto/pagination.dto';
 
 @Injectable()
 export class AdminService {
@@ -25,7 +25,8 @@ export class AdminService {
   // The "moderation queue" is just events with non-draft statuses,
   // mapped to the shape the frontend expects.
 
-  async getModerationQueue(status?: string) {
+  async getModerationQueue(status?: string, pagination: PaginationDto = {}) {
+    const { skip = 0, take = 10 } = pagination;
     // Map frontend status names → DB event statuses
     const statusMap: Record<string, string> = {
       pending_review: 'pending',
@@ -35,13 +36,20 @@ export class AdminService {
     };
     const dbStatus = status ? statusMap[status] ?? status : undefined;
 
-    const events = await this.prisma.event.findMany({
-      where: dbStatus ? { status: dbStatus as any } : { status: { not: 'draft' } },
-      orderBy: { createdAt: 'desc' },
-    });
+    const where = dbStatus ? { status: dbStatus as any } : { status: { not: 'draft' } };
+
+    const [events, total] = await Promise.all([
+      this.prisma.event.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+      }),
+      this.prisma.event.count({ where }),
+    ]);
 
     // Map events to queue item shape
-    return events.map((e) => ({
+    const items = events.map((e) => ({
       id: e.id,
       eventId: e.id,
       eventTitle: e.title,
@@ -65,6 +73,8 @@ export class AdminService {
       capacity: e.capacity,
       venue: e.venue,
     }));
+
+    return { items, total, skip, take };
   }
 
   async approveEventInQueue(eventId: string, note?: string) {
@@ -170,11 +180,18 @@ export class AdminService {
 
   // ── Users ────────────────────────────────────────────────────────
 
-  async getUsers() {
-    const users = await this.prisma.user.findMany({
-      orderBy: { createdAt: 'desc' },
-    });
-    return users.map(({ password: _, ...u }) => u);
+  async getUsers(pagination: PaginationDto = {}) {
+    const { skip = 0, take = 10 } = pagination;
+    const [users, total] = await Promise.all([
+      this.prisma.user.findMany({
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+      }),
+      this.prisma.user.count(),
+    ]);
+    const items = users.map(({ password: _, ...u }) => u);
+    return { items, total, skip, take };
   }
 
   async updateUser(id: string, data: { status: 'active' | 'suspended' }) {
@@ -190,10 +207,17 @@ export class AdminService {
 
   // ── Institutions ─────────────────────────────────────────────────
 
-  async getInstitutions() {
-    const admins = await this.prisma.user.findMany({
-      where: { role: 'institution_admin' },
-    });
+  async getInstitutions(pagination: PaginationDto = {}) {
+    const { skip = 0, take = 10 } = pagination;
+    const where = { role: 'institution_admin' as any };
+    const [admins, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        skip,
+        take,
+      }),
+      this.prisma.user.count({ where }),
+    ]);
 
     const instMap: Record<
       string,
@@ -215,7 +239,8 @@ export class AdminService {
       }
     }
 
-    return Object.values(instMap);
+    const items = Object.values(instMap);
+    return { items, total, skip, take };
   }
 
   async suspendInstitution(institutionName: string) {

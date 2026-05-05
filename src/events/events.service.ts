@@ -7,13 +7,15 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
+import { PaginationDto } from '../common/dto/pagination.dto';
 
 @Injectable()
 export class EventsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getPublicEvents(filters: any = {}) {
+  async getPublicEvents(filters: any = {}, pagination: PaginationDto = {}) {
     const { category, city, search } = filters;
+    const { skip = 0, take = 10 } = pagination;
     const where: any = { status: 'approved' };
 
     if (category) where.category = category;
@@ -25,16 +27,35 @@ export class EventsService {
       ];
     }
 
-    return this.prisma.event.findMany({
-      where,
-      orderBy: { date: 'asc' },
-    });
+    const [items, total] = await Promise.all([
+      this.prisma.event.findMany({
+        where,
+        orderBy: { date: 'asc' },
+        skip,
+        take,
+      }),
+      this.prisma.event.count({ where }),
+    ]);
+
+    return { items, total, skip, take };
   }
 
-  async fetchAllEvents(institutionId?: string) {
+  async fetchAllEvents(institutionId?: string, pagination: PaginationDto = {}) {
+    const { skip = 0, take = 10 } = pagination;
     const where: any = {};
     if (institutionId) where.institution = institutionId;
-    return this.prisma.event.findMany({ where, orderBy: { createdAt: 'desc' } });
+
+    const [items, total] = await Promise.all([
+      this.prisma.event.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+      }),
+      this.prisma.event.count({ where }),
+    ]);
+
+    return { items, total, skip, take };
   }
 
   async getEventById(id: string) {
@@ -110,37 +131,86 @@ export class EventsService {
   }
 
   async registerForEvent(eventId: string, userId: string) {
-    const event = await this.prisma.event.findUnique({
-      where: { id: eventId },
-    });
-    if (!event) throw new NotFoundException('Event not found');
-    if (event.attendees >= event.capacity)
-      throw new BadRequestException('Event is at capacity');
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Check if event exists and get capacity
+      const event = await tx.event.findUnique({
+        where: { id: eventId },
+        select: { id: true, capacity: true, attendees: true },
+      });
 
-    await this.prisma.$transaction([
-      this.prisma.user.update({
+      if (!event) throw new NotFoundException('Event not found');
+
+      // 2. Check if user is already registered to prevent double counting
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: {
+          registeredEvents: {
+            where: { id: eventId },
+            select: { id: true },
+          },
+        },
+      });
+
+      if (user?.registeredEvents.length) {
+        throw new BadRequestException('You are already registered for this event');
+      }
+
+      // 3. Atomic update: increment attendees ONLY if below capacity
+      // Using updateMany because it allows filtering by non-unique fields (attendees < capacity)
+      const updateResult = await tx.event.updateMany({
+        where: {
+          id: eventId,
+          attendees: { lt: event.capacity },
+        },
+        data: {
+          attendees: { increment: 1 },
+        },
+      });
+
+      if (updateResult.count === 0) {
+        throw new BadRequestException('Event is at capacity');
+      }
+
+      // 4. Connect the user to the event
+      await tx.user.update({
         where: { id: userId },
         data: { registeredEvents: { connect: { id: eventId } } },
-      }),
-      this.prisma.event.update({
-        where: { id: eventId },
-        data: { attendees: { increment: 1 } },
-      }),
-    ]);
-    return { success: true };
+      });
+
+      return { success: true };
+    });
   }
 
   async cancelRegistration(eventId: string, userId: string) {
-    await this.prisma.$transaction([
-      this.prisma.user.update({
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Check if user is actually registered
+      const user = await tx.user.findUnique({
         where: { id: userId },
-        data: { registeredEvents: { disconnect: { id: eventId } } },
-      }),
-      this.prisma.event.update({
+        select: {
+          registeredEvents: {
+            where: { id: eventId },
+            select: { id: true },
+          },
+        },
+      });
+
+      if (!user?.registeredEvents.length) {
+        throw new BadRequestException('You are not registered for this event');
+      }
+
+      // 2. Atomic decrement
+      await tx.event.update({
         where: { id: eventId },
         data: { attendees: { decrement: 1 } },
-      }),
-    ]);
-    return { success: true };
+      });
+
+      // 3. Disconnect
+      await tx.user.update({
+        where: { id: userId },
+        data: { registeredEvents: { disconnect: { id: eventId } } },
+      });
+
+      return { success: true };
+    });
   }
 }
