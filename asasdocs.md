@@ -64,7 +64,21 @@ This document outlines the core architectural phases implemented to elevate the 
 
 ---
 
+## 🛡️ Phase 5: Performance & Security (Rate Limiting)
+**Goal:** DDoS protection and system stability.
+
+### Implementation
+- **Throttler Integration:** Implemented `@nestjs/throttler` globally.
+- **Standard Limits:** Set a global limit of 60 requests per minute per IP address.
+- **Global Guard:** Registered the `ThrottlerGuard` in `AppModule` to protect all endpoints by default.
+
+### Benefits
+- **Abuse Prevention:** Protects against brute-force attacks on login and registration.
+- **Fair Usage:** Ensures a single high-traffic user doesn't degrade performance for others.
+- **System Resilience:** Acts as a safety valve against bot-driven traffic spikes.
+
+---
+
 ## 🚀 Future Phases
-- **Phase 5:** Rate Limiting (DDoS Protection)
 - **Phase 6:** Healthchecks & Monitoring (Prometheus)
 - **Phase 7:** Automated Testing (Unit & E2E)

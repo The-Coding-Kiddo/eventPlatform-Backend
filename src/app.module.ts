@@ -8,9 +8,31 @@ import { UsersModule } from './users/users.module';
 import { AdminModule } from './admin/admin.module';
 import { NotificationsModule } from './notifications/notifications.module';
 
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
+
 @Module({
-  imports: [PrismaModule, AuthModule, EventsModule, UsersModule, AdminModule, NotificationsModule],
+  imports: [
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000, // 1 minute
+        limit: 60, // 60 requests
+      },
+    ]),
+    PrismaModule,
+    AuthModule,
+    EventsModule,
+    UsersModule,
+    AdminModule,
+    NotificationsModule,
+  ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}
