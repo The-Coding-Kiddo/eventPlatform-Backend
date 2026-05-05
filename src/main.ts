@@ -4,6 +4,8 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { json, urlencoded } from 'express';
+import { WinstonModule } from 'nest-winston';
+import { winstonConfig } from './common/logger/winston.config';
 
 async function bootstrap() {
   // Validate JWT_SECRET at startup
@@ -11,7 +13,9 @@ async function bootstrap() {
     throw new Error('CRITICAL: JWT_SECRET environment variable is not set. Application cannot start.');
   }
 
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    logger: WinstonModule.createLogger(winstonConfig),
+  });
   
   // Configure CORS: only allow requests from frontend domain
   const allowedOrigins = [
