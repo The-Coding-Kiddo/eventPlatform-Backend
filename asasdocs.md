@@ -80,6 +80,89 @@ This document serves as the technical blueprint for the architectural elevation 
 
 ---
 
-## 🚀 Future Roadmap
-- **Phase 7:** Healthcheck API (Terminus) for Kubernetes/Container orchestration.
-- **Phase 8:** Automated Test Suite (Jest & Supertest) for regression prevention.
+## 🏥 Phase 7: Healthcheck API (Container Orchestration)
+**Goal:** Expose a machine-readable liveness/readiness probe for Docker and Kubernetes orchestration.
+
+### Technical Implementation
+- **Terminus Integration:** Installed `@nestjs/terminus` and created a dedicated `HealthModule`.
+- **Custom `PrismaHealthIndicator`:** Extends `HealthIndicator` and pings the database with `SELECT 1` via `prisma.$queryRaw`. Returns a structured `HealthIndicatorResult`; throws `HealthCheckError` on failure.
+- **Endpoint:** `GET /health` — performs two checks in parallel:
+  1. **`database`** — confirms PostgreSQL connectivity via Prisma.
+  2. **`memory_heap`** — asserts Node.js heap usage remains below **300 MB**.
+- **HTTP Semantics:** Returns `200 OK` when all checks pass; returns `503 Service Unavailable` automatically when any check fails — compatible with Kubernetes liveness and readiness probe configuration.
+
+### File Structure
+```
+src/health/
+  health.module.ts          # Wires TerminusModule + PrismaModule
+  health.controller.ts      # GET /health endpoint
+  prisma.health.ts          # Custom DB health indicator
+```
+
+### Enterprise Benefits
+- **Zero-Downtime Deploys:** K8s readiness probe prevents traffic routing to unhealthy pods.
+- **Auto-Recovery:** K8s liveness probe restarts containers that become unresponsive.
+- **Observability:** Health endpoint becomes the canonical "is the system alive?" source of truth for monitoring tools (Datadog, UptimeRobot, etc.).
+
+---
+
+## 🧪 Phase 8: Automated Test Suite (Regression Prevention)
+**Goal:** Establish a comprehensive test harness that catches regressions before they reach production.
+
+### Technical Implementation
+- **Unit Tests (Jest + mocked Prisma):** All four service layers are fully covered with isolated tests using `jest.fn()` mocks for `PrismaService`. No real database connection required.
+  - `auth.service.spec.ts` — register, login (including password hashing verification), getMe, provision
+  - `events.service.spec.ts` — public listing with filters, CRUD permission matrix, atomic registration/cancellation via mocked `$transaction`
+  - `admin.service.spec.ts` — moderation queue, approve/reject workflow, analytics aggregation correctness, user/institution management
+  - `notifications.service.spec.ts` — direct notifications, role/category fan-out broadcasts, mark-read lifecycle, deletion
+- **E2E Tests (SuperTest):** Full HTTP request/response cycle tests against the real NestJS application with an overridden `PrismaService` mock:
+  - `GET /health` — liveness probe response shape
+  - `POST /auth/register` — success, 409 conflict, 400 validation
+  - `POST /auth/login` — 401 on invalid credentials
+  - `GET /events` — public listing with query params
+  - `GET /events/:id` — 404 when not found
+  - Protected route guard verification (401 without JWT)
+  - **Envelope contract assertions** — every success response has `{ success, data, timestamp }`, every error has `{ success, statusCode, message }`
+
+### Running Tests
+```bash
+# Unit tests
+npm test
+
+# Unit tests with coverage report
+npm run test:cov
+
+# E2E tests
+npm run test:e2e
+```
+
+### Enterprise Benefits
+- **Regression Prevention:** Any breaking change to service logic or API contracts is caught immediately.
+- **Refactor Confidence:** Developers can safely restructure code knowing the test suite will flag breakage.
+- **CI/CD Gate:** Tests serve as the quality gate in automated deployment pipelines.
+
+---
+
+## ⚡ Performance Fix: Analytics Query Optimization
+**Goal:** Eliminate the O(n) memory bottleneck in the admin analytics endpoint.
+
+### Problem
+The original `getAnalytics()` method called `prisma.event.findMany()` and `prisma.user.findMany()` with no filters, loading **every event and user record into Node.js memory** then filtering in JavaScript. At scale (10k+ events), this causes memory spikes and slow responses.
+
+### Solution
+Replaced all in-memory aggregations with **database-level queries**:
+
+| Before | After |
+|--------|-------|
+| `event.findMany()` → JS filter | `event.count({ where: { status } })` |
+| JS `filter().length` for categories | `event.groupBy({ by: ['category'], _count })` |
+| JS `sort().slice()` for cities | `event.groupBy({ by: ['location'], orderBy, take: 5 })` |
+| JS date comparison for monthly count | `event.count({ where: { createdAt: { gte: startOfMonth } } })` |
+| JS Set dedup for institutions | Deduplicated from minimal `findMany({ select: { institution, suspended } })` |
+
+All 9 queries run concurrently via a single `Promise.all([...])`, so total latency equals the slowest individual query rather than their sum.
+
+### Enterprise Benefits
+- **Constant-time performance** regardless of dataset size.
+- **Dramatically reduced memory pressure** on the Node.js process.
+- **Accurate `activeInstitutions` count** — now correctly tracks the `suspended` flag per institution (previously it was always equal to `totalInstitutions`).

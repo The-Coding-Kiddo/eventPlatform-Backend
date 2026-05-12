@@ -127,51 +127,78 @@ export class AdminService {
   // ── Analytics ────────────────────────────────────────────────────
 
   async getAnalytics() {
-    const [events, users] = await Promise.all([
-      this.prisma.event.findMany(),
-      this.prisma.user.findMany({ where: { role: { not: 'super_admin' } } }),
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // ── All counts hit the DB directly — no in-memory arrays ──────────────────
+    const [
+      totalEvents,
+      pendingEvents,
+      approvedEvents,
+      rejectedEvents,
+      totalCitizens,
+      eventsThisMonth,
+      categoryGroups,
+      cityGroups,
+      institutionAdmins,
+    ] = await Promise.all([
+      this.prisma.event.count(),
+      this.prisma.event.count({ where: { status: 'pending' } }),
+      this.prisma.event.count({ where: { status: 'approved' } }),
+      this.prisma.event.count({ where: { status: 'rejected' } }),
+      this.prisma.user.count({ where: { role: 'citizen' } }),
+      this.prisma.event.count({ where: { createdAt: { gte: startOfMonth } } }),
+      // Category distribution grouped at DB level
+      this.prisma.event.groupBy({
+        by: ['category'],
+        _count: { id: true },
+        orderBy: { _count: { id: 'desc' } },
+      }),
+      // Top 5 cities grouped at DB level
+      this.prisma.event.groupBy({
+        by: ['location'],
+        _count: { id: true },
+        orderBy: { _count: { id: 'desc' } },
+        take: 5,
+      }),
+      // Institution admins — distinct institutions, suspended flag
+      this.prisma.user.findMany({
+        where: { role: 'institution_admin' },
+        select: { institution: true, suspended: true },
+      }),
     ]);
 
-    const total    = events.length;
-    const pending  = events.filter((e) => e.status === 'pending').length;
-    const approved = events.filter((e) => e.status === 'approved').length;
-    const rejected = events.filter((e) => e.status === 'rejected').length;
-    const reviewed = approved + rejected;
+    const reviewed = approvedEvents + rejectedEvents;
 
-    const institutions = new Set(
-      users
-        .filter((u) => u.role === 'institution_admin' && u.institution)
-        .map((u) => u.institution),
-    );
+    // Deduplicate institutions (one row per unique name)
+    const instMap = new Map<string, boolean>();
+    for (const u of institutionAdmins) {
+      if (u.institution && !instMap.has(u.institution)) {
+        instMap.set(u.institution, u.suspended);
+      }
+    }
 
-    // Category distribution
-    const catMap: Record<string, number> = {};
-    events.forEach((e) => { catMap[e.category] = (catMap[e.category] ?? 0) + 1; });
-    const categoryDistribution = Object.entries(catMap).map(([name, value]) => ({ name, value }));
+    const categoryDistribution = categoryGroups.map((g) => ({
+      name: g.category,
+      value: g._count.id,
+    }));
 
-    // Top cities
-    const cityMap: Record<string, number> = {};
-    events.forEach((e) => { cityMap[e.location] = (cityMap[e.location] ?? 0) + 1; });
-    const topCities = Object.entries(cityMap)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([city, count]) => ({ city, count }));
+    const topCities = cityGroups.map((g) => ({
+      city: g.location,
+      count: g._count.id,
+    }));
 
     return {
-      totalEvents: total,
-      pendingModeration: pending,
-      approvedEvents: approved,
-      rejectedEvents: rejected,
-      approvalRate: reviewed ? Math.round((approved / reviewed) * 100) : 0,
+      totalEvents,
+      pendingModeration: pendingEvents,
+      approvedEvents,
+      rejectedEvents,
+      approvalRate: reviewed ? Math.round((approvedEvents / reviewed) * 100) : 0,
       avgRiskScore: 0,
-      totalInstitutions: institutions.size,
-      activeInstitutions: institutions.size,
-      totalUsers: users.filter((u) => u.role === 'citizen').length,
-      eventsThisMonth: events.filter((e) => {
-        const d = new Date(e.createdAt);
-        const now = new Date();
-        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-      }).length,
+      totalInstitutions: instMap.size,
+      activeInstitutions: [...instMap.values()].filter((suspended) => !suspended).length,
+      totalUsers: totalCitizens,
+      eventsThisMonth,
       monthlyEvents: [],
       categoryDistribution,
       topCities,

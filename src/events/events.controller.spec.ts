@@ -1,5 +1,23 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { EventsController } from './events.controller';
+import { EventsService } from './events.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+
+const mockEventsService = {
+  getPublicEvents: jest.fn(),
+  fetchAllEvents: jest.fn(),
+  getEventById: jest.fn(),
+  submitEvent: jest.fn(),
+  saveDraft: jest.fn(),
+  updateEvent: jest.fn(),
+  deleteEvent: jest.fn(),
+  saveEvent: jest.fn(),
+  unsaveEvent: jest.fn(),
+  registerForEvent: jest.fn(),
+  cancelRegistration: jest.fn(),
+  getAttendees: jest.fn(),
+};
 
 describe('EventsController', () => {
   let controller: EventsController;
@@ -7,7 +25,13 @@ describe('EventsController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [EventsController],
-    }).compile();
+      providers: [{ provide: EventsService, useValue: mockEventsService }],
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(RolesGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<EventsController>(EventsController);
   });
