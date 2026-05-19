@@ -89,3 +89,17 @@ model Notification {
 
   createdAt      DateTime @default(now())
 }
+
+// ─────────────────────────────────────────────────────────────────
+// AUDIT LOG MODEL
+// ─────────────────────────────────────────────────────────────────
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  userEmail String
+  userRole  String
+  action    String   // e.g. APPROVE_EVENT | REJECT_EVENT | SUBMIT_EVENT | UPDATE_EVENT
+  targetId  String?  // ID of the target resource (like eventId)
+  details   String?  @db.Text
+  createdAt DateTime @default(now())
+}

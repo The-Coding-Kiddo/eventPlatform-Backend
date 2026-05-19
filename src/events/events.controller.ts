@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { EventsService } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
-import type { UpdateEventDto } from './dto/update-event.dto';
+import { UpdateEventDto } from './dto/update-event.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -20,11 +20,15 @@ import { Roles } from '../auth/roles.decorator';
 import type { JwtPayload } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/user.decorator';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
+import { AuditService } from '../audit/audit.service';
 
 @ApiTags('Events')
 @Controller('events')
 export class EventsController {
-  constructor(private readonly eventsService: EventsService) {}
+  constructor(
+    private readonly eventsService: EventsService,
+    private readonly auditService: AuditService,
+  ) {}
 
   @ApiOperation({ summary: 'Get public approved events' })
   @ApiResponse({ status: 200, description: 'List of events' })
@@ -76,10 +80,21 @@ export class EventsController {
     if (user?.role === 'institution_admin' && !institution) {
       throw new ForbiddenException('Institution admin must have an institution assigned.');
     }
-    return this.eventsService.submitEvent({
+    const result = await this.eventsService.submitEvent({
       ...createEventDto,
       institution,
     });
+    if (user) {
+      await this.auditService.log(
+        user.sub,
+        user.email,
+        user.role,
+        'SUBMIT_EVENT',
+        result.event?.id,
+        `Event "${createEventDto.title}" submitted for moderation.`,
+      );
+    }
+    return result;
   }
 
   @ApiBearerAuth()
@@ -95,10 +110,21 @@ export class EventsController {
     if (user?.role === 'institution_admin' && !institution) {
       throw new ForbiddenException('Institution admin must have an institution assigned.');
     }
-    return this.eventsService.saveDraft({
+    const result = await this.eventsService.saveDraft({
       ...createEventDto,
       institution,
     });
+    if (user) {
+      await this.auditService.log(
+        user.sub,
+        user.email,
+        user.role,
+        'SAVE_DRAFT',
+        result.event?.id,
+        `Event "${createEventDto.title}" saved as draft.`,
+      );
+    }
+    return result;
   }
 
   @ApiBearerAuth()
@@ -112,12 +138,32 @@ export class EventsController {
     @CurrentUser() user?: JwtPayload,
   ) {
     const institution = user?.institution ?? '';
-    return this.eventsService.updateEvent(
+    const result = await this.eventsService.updateEvent(
       id,
       updateEventDto,
       institution,
       user?.role ?? 'citizen',
     );
+    if (user) {
+      let action = 'UPDATE_EVENT';
+      let details = `Event "${result.title}" updated.`;
+      if (updateEventDto.status === 'approved') {
+        action = 'APPROVE_EVENT';
+        details = `Event "${result.title}" approved for publication.`;
+      } else if (updateEventDto.status === 'rejected') {
+        action = 'REJECT_EVENT';
+        details = `Event "${result.title}" rejected.`;
+      }
+      await this.auditService.log(
+        user.sub,
+        user.email,
+        user.role,
+        action,
+        id,
+        details,
+      );
+    }
+    return result;
   }
 
   @ApiBearerAuth()
@@ -127,7 +173,18 @@ export class EventsController {
   @Delete(':id')
   async deleteEvent(@Param('id') id: string, @CurrentUser() user?: JwtPayload) {
     const role = user?.role ?? 'citizen';
-    return this.eventsService.deleteEvent(id, user?.institution ?? '', role);
+    const result = await this.eventsService.deleteEvent(id, user?.institution ?? '', role);
+    if (user) {
+      await this.auditService.log(
+        user.sub,
+        user.email,
+        user.role,
+        'DELETE_EVENT',
+        id,
+        `Event ID ${id} deleted.`,
+      );
+    }
+    return result;
   }
 
   // ── Citizen Endpoints ──

@@ -8,6 +8,7 @@ import { UsersModule } from './users/users.module';
 import { AdminModule } from './admin/admin.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { HealthModule } from './health/health.module';
+import { AuditModule } from './audit/audit.module';
 
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
@@ -27,6 +28,7 @@ import { APP_GUARD } from '@nestjs/core';
     AdminModule,
     NotificationsModule,
     HealthModule,
+    AuditModule,
   ],
   controllers: [AppController],
   providers: [

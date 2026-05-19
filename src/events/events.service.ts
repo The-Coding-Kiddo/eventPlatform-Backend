@@ -89,6 +89,19 @@ export class EventsService {
     if (event.status === 'approved' && role !== 'super_admin')
       throw new ForbiddenException('Cannot edit approved events');
 
+    // Enterprise-grade RBAC checks:
+    if (role !== 'super_admin') {
+      // 1. Lock Institution: non-superadmins cannot hijack or transfer events to other institutions
+      if (data.institution && data.institution !== institution) {
+        throw new ForbiddenException('You cannot change the institution of this event.');
+      }
+      
+      // 2. Lock Moderation Status: non-superadmins cannot approve or reject events
+      if (data.status && data.status !== 'draft' && data.status !== 'pending') {
+        throw new ForbiddenException('You do not have permission to moderate this event status.');
+      }
+    }
+
     return this.prisma.event.update({ where: { id }, data });
   }
 
