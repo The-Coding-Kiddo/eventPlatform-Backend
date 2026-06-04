@@ -36,12 +36,18 @@ export class EventsController {
   @ApiResponse({ status: 200, description: 'List of events' })
   @Get()
   async getPublicEvents(
-    @Query() pagination: PaginationDto,
+    @Query('skip') skip?: string,
+    @Query('take') take?: string,
     @Query('category') category?: string,
     @Query('city') city?: string,
     @Query('search') search?: string,
+    @Query('timeframe') timeframe?: 'upcoming' | 'past' | 'all',
   ) {
-    return this.eventsService.getPublicEvents({ category, city, search }, pagination);
+    const pagination: PaginationDto = {
+      skip: skip ? Number(skip) : undefined,
+      take: take ? Number(take) : undefined,
+    };
+    return this.eventsService.getPublicEvents({ category, city, search, timeframe }, pagination);
   }
 
   @ApiBearerAuth()

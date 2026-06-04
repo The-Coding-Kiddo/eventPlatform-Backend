@@ -16,23 +16,48 @@ export class EventsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getPublicEvents(filters: any = {}, pagination: PaginationDto = {}) {
-    const { category, city, search } = filters;
+    const { category, city, search, timeframe = 'all' } = filters;
     const { skip = 0, take = 10 } = pagination;
     const where: any = { status: 'approved' };
+    const now = new Date();
+    const today = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 10);
+    const currentTime = now.toTimeString().slice(0, 5);
 
     if (category) where.category = category;
     if (city) where.location = { contains: city, mode: 'insensitive' };
-    if (search) {
+    if (timeframe === 'upcoming') {
       where.OR = [
+        { date: { gt: today } },
+        { date: today, time: { gte: currentTime } },
+      ];
+    }
+    if (timeframe === 'past') {
+      where.OR = [
+        { date: { lt: today } },
+        { date: today, time: { lt: currentTime } },
+      ];
+    }
+    if (search) {
+      const searchFilter = [
         { title: { contains: search, mode: 'insensitive' } },
         { description: { contains: search, mode: 'insensitive' } },
       ];
+      if (where.OR) {
+        where.AND = [{ OR: where.OR }, { OR: searchFilter }];
+        delete where.OR;
+      } else {
+        where.OR = searchFilter;
+      }
     }
 
     const [items, total] = await Promise.all([
       this.prisma.event.findMany({
         where,
-        orderBy: { date: 'asc' },
+        orderBy: timeframe === 'past'
+          ? [{ date: 'desc' }, { time: 'desc' }]
+          : [{ date: 'asc' }, { time: 'asc' }],
         skip,
         take,
       }),

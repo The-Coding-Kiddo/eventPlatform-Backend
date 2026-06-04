@@ -1,6 +1,7 @@
 import {
   Controller,
   Put,
+  Patch,
   Body,
   UseGuards,
   ForbiddenException,
@@ -10,7 +11,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { JwtPayload } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/user.decorator';
 import { UpdateSubscriptionsDto } from '../events/dto/update-subscriptions.dto';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 
 @ApiTags('Users')
 @ApiBearerAuth()
@@ -25,9 +26,36 @@ export class UsersController {
     @Body() body: UpdateSubscriptionsDto,
     @CurrentUser() user?: JwtPayload,
   ) {
-    if (!user) {
-      throw new ForbiddenException('User session not found.');
-    }
+    if (!user) throw new ForbiddenException('User session not found.');
     return this.usersService.updateSubscriptions(user.sub, body.categories);
   }
+
+  @ApiOperation({ summary: 'Update own profile (name)' })
+  @ApiBody({ schema: { example: { name: 'Jane Doe' } } })
+  @UseGuards(JwtAuthGuard)
+  @Patch('profile')
+  async updateProfile(
+    @Body() body: { name: string },
+    @CurrentUser() user?: JwtPayload,
+  ) {
+    if (!user) throw new ForbiddenException('User session not found.');
+    return this.usersService.updateProfile(user.sub, { name: body.name });
+  }
+
+  @ApiOperation({ summary: 'Change own password' })
+  @ApiBody({ schema: { example: { currentPassword: 'old', newPassword: 'new123' } } })
+  @UseGuards(JwtAuthGuard)
+  @Patch('password')
+  async changePassword(
+    @Body() body: { currentPassword: string; newPassword: string },
+    @CurrentUser() user?: JwtPayload,
+  ) {
+    if (!user) throw new ForbiddenException('User session not found.');
+    return this.usersService.changePassword(
+      user.sub,
+      body.currentPassword,
+      body.newPassword,
+    );
+  }
 }
+
