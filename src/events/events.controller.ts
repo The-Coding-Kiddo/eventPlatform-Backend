@@ -13,6 +13,7 @@ import {
 import { EventsService } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
+import { InviteAttendeeDto } from './dto/invite-attendee.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -21,6 +22,7 @@ import type { JwtPayload } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/user.decorator';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { AuditService } from '../audit/audit.service';
+
 
 @ApiTags('Events')
 @Controller('events')
@@ -237,6 +239,38 @@ export class EventsController {
     @CurrentUser() user?: JwtPayload,
   ) {
     return this.eventsService.getAttendees(id, user?.institution ?? '', user?.role ?? 'citizen');
+  }
+
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Invite a citizen as an attendee of an event (Admin only)' })
+  @Roles('institution_admin', 'super_admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Post(':id/invite-attendee')
+  async inviteAttendee(
+    @Param('id') id: string,
+    @Body() inviteAttendeeDto: InviteAttendeeDto,
+    @CurrentUser() user?: JwtPayload,
+  ) {
+    const result = await this.eventsService.inviteAttendee(
+      id,
+      inviteAttendeeDto.email,
+      inviteAttendeeDto.name || '',
+      user?.institution ?? '',
+      user?.role ?? 'citizen',
+    );
+
+    if (user) {
+      await this.auditService.log(
+        user.sub,
+        user.email,
+        user.role,
+        'INVITE_ATTENDEE',
+        id,
+        `User ${inviteAttendeeDto.email} invited to event ID ${id} as attendee.`,
+      );
+    }
+
+    return result;
   }
 
   private getUserId(user?: JwtPayload): string {

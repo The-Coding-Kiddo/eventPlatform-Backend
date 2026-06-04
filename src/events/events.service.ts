@@ -8,6 +8,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
+import * as bcrypt from 'bcrypt';
+
 
 @Injectable()
 export class EventsService {
@@ -252,5 +254,83 @@ export class EventsService {
     }
 
     return event.registeredUsers;
+  }
+
+  async inviteAttendee(
+    eventId: string,
+    email: string,
+    name: string,
+    adminInstitution: string,
+    adminRole: string,
+  ) {
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true, capacity: true, attendees: true, institution: true },
+    });
+
+    if (!event) throw new NotFoundException('Event not found');
+
+    // Access control: only super_admin or the owner institution admin
+    if (adminRole !== 'super_admin' && event.institution !== adminInstitution) {
+      throw new ForbiddenException('You do not have permission to invite attendees to this event.');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Find or create user
+      let user = await tx.user.findUnique({ where: { email } });
+      if (!user) {
+        // Create user with a secure default hashed password
+        const tempPassword = await bcrypt.hash('invited123', 10);
+        user = await tx.user.create({
+          data: {
+            name: name || email.split('@')[0],
+            email,
+            password: tempPassword,
+            role: 'citizen',
+          },
+        });
+      } else {
+        // Check if already registered
+        const alreadyRegistered = await tx.user.findFirst({
+          where: {
+            id: user.id,
+            registeredEvents: { some: { id: eventId } },
+          },
+        });
+        if (alreadyRegistered) {
+          throw new BadRequestException('User is already registered for this event');
+        }
+      }
+
+      // 2. Check and update capacity
+      const currentEvent = await tx.event.findUnique({
+        where: { id: eventId },
+        select: { capacity: true, attendees: true },
+      });
+
+      if (currentEvent && currentEvent.attendees >= currentEvent.capacity) {
+        throw new BadRequestException('Event is at capacity');
+      }
+
+      // 3. Connect and increment
+      await tx.event.update({
+        where: { id: eventId },
+        data: { attendees: { increment: 1 } },
+      });
+
+      await tx.user.update({
+        where: { id: user.id },
+        data: { registeredEvents: { connect: { id: eventId } } },
+      });
+
+      return {
+        success: true,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+        },
+      };
+    });
   }
 }
