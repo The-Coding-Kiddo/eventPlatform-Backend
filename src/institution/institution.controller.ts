@@ -8,7 +8,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { AdminService } from './admin.service';
+import { InstitutionService } from './institution.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -21,8 +21,8 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 @Roles('super_admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('admin')
-export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+export class InstitutionController {
+  constructor(private readonly institutionService: InstitutionService) {}
 
   // ── Moderation ──
 
@@ -32,7 +32,7 @@ export class AdminController {
     @Query() pagination: PaginationDto,
     @Query('status') status?: string,
   ) {
-    return this.adminService.getModerationQueue(status, pagination);
+    return this.institutionService.getModerationQueue(status, pagination);
   }
 
   @ApiOperation({ summary: 'Approve an event in moderation' })
@@ -42,7 +42,7 @@ export class AdminController {
     @Param('id') id: string,
     @Body() body: { note?: string },
   ) {
-    return this.adminService.approveEventInQueue(id, body.note);
+    return this.institutionService.approveEventInQueue(id, body.note);
   }
 
   @ApiOperation({ summary: 'Reject an event in moderation' })
@@ -52,7 +52,7 @@ export class AdminController {
     @Param('id') id: string,
     @Body() body: { note?: string },
   ) {
-    return this.adminService.rejectEventInQueue(id, body.note);
+    return this.institutionService.rejectEventInQueue(id, body.note);
   }
 
   // ── Analytics ──
@@ -60,7 +60,7 @@ export class AdminController {
   @ApiOperation({ summary: 'Get platform analytics' })
   @Get('analytics')
   async getAnalytics() {
-    return this.adminService.getAnalytics();
+    return this.institutionService.getAnalytics();
   }
 
   // ── Users ──
@@ -68,7 +68,7 @@ export class AdminController {
   @ApiOperation({ summary: 'List all users' })
   @Get('users')
   async getUsers(@Query() pagination: PaginationDto) {
-    return this.adminService.getUsers(pagination);
+    return this.institutionService.getUsers(pagination);
   }
 
   @ApiOperation({ summary: 'Update a user status (suspend/activate)' })
@@ -78,7 +78,7 @@ export class AdminController {
     @Param('id') id: string,
     @Body() body: { status: 'active' | 'suspended' },
   ) {
-    return this.adminService.updateUser(id, body);
+    return this.institutionService.updateUser(id, body);
   }
 
   // ── Institutions ──
@@ -86,7 +86,7 @@ export class AdminController {
   @ApiOperation({ summary: 'List all institutions' })
   @Get('institutions')
   async getInstitutions(@Query() pagination: PaginationDto) {
-    return this.adminService.getInstitutions(pagination);
+    return this.institutionService.getInstitutions(pagination);
   }
 
   @ApiOperation({ summary: 'Suspend an institution' })
@@ -94,7 +94,7 @@ export class AdminController {
   async suspendInstitution(
     @Param('id') id: string,
   ) {
-    return this.adminService.suspendInstitution(id);
+    return this.institutionService.suspendInstitution(id);
   }
 
   @ApiOperation({ summary: 'Unsuspend an institution' })
@@ -102,7 +102,7 @@ export class AdminController {
   async unsuspendInstitution(
     @Param('id') id: string,
   ) {
-    return this.adminService.unsuspendInstitution(id);
+    return this.institutionService.unsuspendInstitution(id);
   }
 
   // ── Legacy / Fallback ──
@@ -113,6 +113,6 @@ export class AdminController {
     @Param('id') id: string,
     @Body() body: UpdateStatusDto,
   ) {
-    return this.adminService.updateEventStatus(id, body);
+    return this.institutionService.updateEventStatus(id, body);
   }
 }

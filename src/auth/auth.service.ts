@@ -16,15 +16,16 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async register(name: string, email: string, password: string) {
+  async register(name: string, email: string, password: string, institution?: string) {
     const existingUser = await this.prisma.user.findUnique({ where: { email } });
     if (existingUser) {
       throw new ConflictException('An account with this email already exists.');
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    const role = institution ? 'institution' : 'citizen';
     const user = await this.prisma.user.create({
-      data: { name, email, password: hashedPassword, role: 'citizen' },
+      data: { name, email, password: hashedPassword, role, institution },
     });
 
     const { password: _, ...userWithoutPassword } = user;
@@ -90,7 +91,7 @@ export class AuthService {
   }
 
   /**
-   * Provision a new institution_admin account.
+   * Provision a new institution account.
    * Only callable by super_admin (enforced in controller).
    */
   async provision(
@@ -114,7 +115,7 @@ export class AuthService {
         name,
         email,
         password: hashedPassword,
-        role: 'institution_admin',
+        role: 'institution',
         institution,
       },
     });

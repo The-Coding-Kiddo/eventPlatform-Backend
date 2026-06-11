@@ -58,7 +58,7 @@ describe('NotificationsService', () => {
     });
 
     it('fan-outs to matching users when forRole is set', async () => {
-      const dto = { type: 'announcement', title: 'Admin Notice', message: 'For all admins', forRole: 'institution_admin' };
+      const dto = { type: 'announcement', title: 'Admin Notice', message: 'For all admins', forRole: 'institution' };
       mockPrisma.user.findMany.mockResolvedValue([{ id: 'u1' }, { id: 'u2' }]);
       mockPrisma.notification.createMany.mockResolvedValue({ count: 2 });
       mockPrisma.notification.findFirst.mockResolvedValue({ ...mockNotif, userId: 'u1' });
@@ -76,7 +76,7 @@ describe('NotificationsService', () => {
     });
 
     it('falls back to direct create when no users match broadcast', async () => {
-      const dto = { type: 'announcement', title: 'Nobody', message: 'No audience', forRole: 'institution_admin' };
+      const dto = { type: 'announcement', title: 'Nobody', message: 'No audience', forRole: 'institution' };
       mockPrisma.user.findMany.mockResolvedValue([]);
       mockPrisma.notification.create.mockResolvedValue({ ...mockNotif, ...dto, userId: null });
 
@@ -97,10 +97,10 @@ describe('NotificationsService', () => {
       expect(result).toHaveLength(1);
     });
 
-    it('does not look up subscriptions for institution_admin', async () => {
+    it('does not look up subscriptions for institution', async () => {
       mockPrisma.notification.findMany.mockResolvedValue([]);
 
-      await service.findForUser('user-1', 'institution_admin', 'MIT');
+      await service.findForUser('user-1', 'institution', 'MIT');
 
       expect(mockPrisma.user.findUnique).not.toHaveBeenCalled();
     });

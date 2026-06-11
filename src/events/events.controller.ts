@@ -14,6 +14,7 @@ import { EventsService } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { InviteAttendeeDto } from './dto/invite-attendee.dto';
+import { GetAllEventsDto } from './dto/get-all-events.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -42,31 +43,30 @@ export class EventsController {
     @Query('city') city?: string,
     @Query('search') search?: string,
     @Query('timeframe') timeframe?: 'upcoming' | 'past' | 'all',
+    @Query('institution') institution?: string,
   ) {
     const pagination: PaginationDto = {
       skip: skip ? Number(skip) : undefined,
       take: take ? Number(take) : undefined,
     };
-    return this.eventsService.getPublicEvents({ category, city, search, timeframe }, pagination);
+    return this.eventsService.getPublicEvents({ category, city, search, timeframe, institution }, pagination);
   }
 
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all events (Admin only)' })
   @ApiResponse({ status: 200, description: 'List of institution events' })
-  @Roles('institution_admin', 'super_admin')
+  @Roles('institution', 'super_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Get('all')
   async getAllEvents(
-    @Query() pagination: PaginationDto,
-    @Query('institutionId') institutionId?: string,
+    @Query() query: GetAllEventsDto,
     @CurrentUser() user?: JwtPayload,
   ) {
-    // If institution admin, restrict to their own institution
-    if (user?.role === 'institution_admin') {
-      return this.eventsService.fetchAllEvents(user.institution, pagination);
+    if (user?.role === 'institution') {
+      return this.eventsService.fetchAllEvents(user.institution, query);
     }
     
-    return this.eventsService.fetchAllEvents(institutionId, pagination);
+    return this.eventsService.fetchAllEvents(query.institutionId, query);
   }
 
   @ApiOperation({ summary: 'Get specific event by ID' })
@@ -77,7 +77,7 @@ export class EventsController {
 
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Submit an event for moderation (pending)' })
-  @Roles('institution_admin', 'super_admin')
+  @Roles('institution', 'super_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Post()
   async submitEvent(
@@ -85,7 +85,7 @@ export class EventsController {
     @CurrentUser() user?: JwtPayload,
   ) {
     const institution = user?.role === 'super_admin' ? (createEventDto.institution || '') : (user?.institution || '');
-    if (user?.role === 'institution_admin' && !institution) {
+    if (user?.role === 'institution' && !institution) {
       throw new ForbiddenException('Institution admin must have an institution assigned.');
     }
     const result = await this.eventsService.submitEvent({
@@ -107,7 +107,7 @@ export class EventsController {
 
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Save an event as draft' })
-  @Roles('institution_admin', 'super_admin')
+  @Roles('institution', 'super_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Post('draft')
   async saveDraft(
@@ -115,7 +115,7 @@ export class EventsController {
     @CurrentUser() user?: JwtPayload,
   ) {
     const institution = user?.role === 'super_admin' ? (createEventDto.institution || '') : (user?.institution || '');
-    if (user?.role === 'institution_admin' && !institution) {
+    if (user?.role === 'institution' && !institution) {
       throw new ForbiddenException('Institution admin must have an institution assigned.');
     }
     const result = await this.eventsService.saveDraft({
@@ -137,7 +137,7 @@ export class EventsController {
 
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update an owned event' })
-  @Roles('institution_admin', 'super_admin')
+  @Roles('institution', 'super_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Put(':id')
   async updateEvent(
@@ -176,7 +176,7 @@ export class EventsController {
 
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete an owned draft/rejected event' })
-  @Roles('institution_admin', 'super_admin')
+  @Roles('institution', 'super_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Delete(':id')
   async deleteEvent(@Param('id') id: string, @CurrentUser() user?: JwtPayload) {
@@ -263,7 +263,7 @@ export class EventsController {
 
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get attendee list for an event (Admin only)' })
-  @Roles('institution_admin', 'super_admin')
+  @Roles('institution', 'super_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Get(':id/attendees')
   async getAttendees(
@@ -275,7 +275,7 @@ export class EventsController {
 
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Invite a citizen as an attendee of an event (Admin only)' })
-  @Roles('institution_admin', 'super_admin')
+  @Roles('institution', 'super_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Post(':id/invite-attendee')
   async inviteAttendee(

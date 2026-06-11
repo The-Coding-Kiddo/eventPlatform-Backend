@@ -4,7 +4,7 @@ import { UpdateStatusDto } from './dto/update-status.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
 
 @Injectable()
-export class AdminService {
+export class InstitutionService {
   constructor(private readonly prisma: PrismaService) {}
 
   // ── Original Methods ──────────────────────────────────────────────
@@ -130,7 +130,6 @@ export class AdminService {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    // ── All counts hit the DB directly — no in-memory arrays ──────────────────
     const [
       totalEvents,
       pendingEvents,
@@ -148,29 +147,25 @@ export class AdminService {
       this.prisma.event.count({ where: { status: 'rejected' } }),
       this.prisma.user.count({ where: { role: 'citizen' } }),
       this.prisma.event.count({ where: { createdAt: { gte: startOfMonth } } }),
-      // Category distribution grouped at DB level
       this.prisma.event.groupBy({
         by: ['category'],
         _count: { id: true },
         orderBy: { _count: { id: 'desc' } },
       }),
-      // Top 5 cities grouped at DB level
       this.prisma.event.groupBy({
         by: ['location'],
         _count: { id: true },
         orderBy: { _count: { id: 'desc' } },
         take: 5,
       }),
-      // Institution admins — distinct institutions, suspended flag
       this.prisma.user.findMany({
-        where: { role: 'institution_admin' },
+        where: { role: 'institution' },
         select: { institution: true, suspended: true },
       }),
     ]);
 
     const reviewed = approvedEvents + rejectedEvents;
 
-    // Deduplicate institutions (one row per unique name)
     const instMap = new Map<string, boolean>();
     for (const u of institutionAdmins) {
       if (u.institution && !instMap.has(u.institution)) {
@@ -235,9 +230,54 @@ export class AdminService {
 
   // ── Institutions ─────────────────────────────────────────────────
 
+  async searchInstitutions(search?: string, pagination: PaginationDto = {}) {
+    const { skip = 0, take = 10 } = pagination;
+    const where: any = { role: 'institution' as any };
+    if (search) {
+      where.institution = { contains: search, mode: 'insensitive' };
+    }
+
+    const [users, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        orderBy: { institution: 'asc' },
+        skip,
+        take,
+        select: {
+          id: true,
+          name: true,
+          institution: true,
+          bio: true,
+          profilePicture: true,
+          _count: { select: { followers: true } },
+        },
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+
+    // Deduplicate by institution name, keeping the first user per institution
+    const seen = new Set<string>();
+    const items = users
+      .filter((u) => {
+        if (!u.institution || seen.has(u.institution)) return false;
+        seen.add(u.institution);
+        return true;
+      })
+      .map((u) => ({
+        id: u.id,
+        name: u.name,
+        institutionName: u.institution,
+        bio: u.bio,
+        profilePicture: u.profilePicture,
+        followerCount: u._count.followers,
+      }));
+
+    return { items, total, skip, take };
+  }
+
   async getInstitutions(pagination: PaginationDto = {}) {
     const { skip = 0, take = 10 } = pagination;
-    const where = { role: 'institution_admin' as any };
+    const where = { role: 'institution' as any };
     const [admins, total] = await Promise.all([
       this.prisma.user.findMany({
         where,
@@ -273,7 +313,7 @@ export class AdminService {
 
   async suspendInstitution(institutionName: string) {
     await this.prisma.user.updateMany({
-      where: { institution: institutionName, role: 'institution_admin' },
+      where: { institution: institutionName, role: 'institution' },
       data: { suspended: true },
     });
     return { id: institutionName, name: institutionName, status: 'suspended' };
@@ -281,7 +321,7 @@ export class AdminService {
 
   async unsuspendInstitution(institutionName: string) {
     await this.prisma.user.updateMany({
-      where: { institution: institutionName, role: 'institution_admin' },
+      where: { institution: institutionName, role: 'institution' },
       data: { suspended: false },
     });
     return { id: institutionName, name: institutionName, status: 'active' };

@@ -17,7 +17,7 @@ export class EventsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getPublicEvents(filters: any = {}, pagination: PaginationDto = {}) {
-    const { category, city, search, timeframe = 'all' } = filters;
+    const { category, city, search, timeframe = 'all', institution } = filters;
     const { skip = 0, take = 10 } = pagination;
     const where: any = { status: 'approved' };
     const now = new Date();
@@ -40,6 +40,7 @@ export class EventsService {
         { date: today, time: { lt: currentTime } },
       ];
     }
+    if (institution) where.institution = institution;
     if (search) {
       const searchFilter = [
         { title: { contains: search, mode: 'insensitive' } },
@@ -246,7 +247,7 @@ export class EventsService {
 
       const isAllowed =
         caller.role === 'super_admin' ||
-        (caller.role === 'institution_admin' &&
+        (caller.role === 'institution' &&
           caller.institution === event.institution);
       if (!isAllowed) {
         throw new ForbiddenException(
@@ -423,7 +424,7 @@ export class EventsService {
 
         const isAllowed =
           caller.role === 'super_admin' ||
-          (caller.role === 'institution_admin' &&
+          (caller.role === 'institution' &&
             caller.institution === event.institution);
         if (!isAllowed) {
           throw new ForbiddenException(

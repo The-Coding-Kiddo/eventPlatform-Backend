@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { AdminService } from './admin.service';
+import { InstitutionService } from './institution.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotFoundException } from '@nestjs/common';
 
@@ -40,18 +40,17 @@ const mockEvent = {
   updatedAt: new Date(),
 };
 
-describe('AdminService', () => {
-  let service: AdminService;
+describe('InstitutionService', () => {
+  let service: InstitutionService;
 
   beforeEach(async () => {
     jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
-      providers: [AdminService, { provide: PrismaService, useValue: mockPrisma }],
+      providers: [InstitutionService, { provide: PrismaService, useValue: mockPrisma }],
     }).compile();
-    service = module.get<AdminService>(AdminService);
+    service = module.get<InstitutionService>(InstitutionService);
   });
 
-  // ── getModerationQueue ─────────────────────────────────────────────────────
   describe('getModerationQueue', () => {
     it('returns paginated moderation queue with mapped statuses', async () => {
       mockPrisma.event.findMany.mockResolvedValue([mockEvent]);
@@ -76,7 +75,6 @@ describe('AdminService', () => {
     });
   });
 
-  // ── approveEventInQueue ────────────────────────────────────────────────────
   describe('approveEventInQueue', () => {
     it('sets event status to approved', async () => {
       mockPrisma.event.findUnique.mockResolvedValue(mockEvent);
@@ -96,7 +94,6 @@ describe('AdminService', () => {
     });
   });
 
-  // ── rejectEventInQueue ─────────────────────────────────────────────────────
   describe('rejectEventInQueue', () => {
     it('sets event status to rejected', async () => {
       mockPrisma.event.findUnique.mockResolvedValue(mockEvent);
@@ -107,21 +104,19 @@ describe('AdminService', () => {
     });
   });
 
-  // ── getAnalytics ───────────────────────────────────────────────────────────
   describe('getAnalytics', () => {
     it('returns correct analytics shape using DB aggregations', async () => {
-      // count() calls in order
       mockPrisma.event.count
-        .mockResolvedValueOnce(10)  // totalEvents
-        .mockResolvedValueOnce(3)   // pending
-        .mockResolvedValueOnce(5)   // approved
-        .mockResolvedValueOnce(2)   // rejected
-        .mockResolvedValueOnce(4);  // eventsThisMonth
-      mockPrisma.user.count.mockResolvedValue(20); // totalCitizens
+        .mockResolvedValueOnce(10)
+        .mockResolvedValueOnce(3)
+        .mockResolvedValueOnce(5)
+        .mockResolvedValueOnce(2)
+        .mockResolvedValueOnce(4);
+      mockPrisma.user.count.mockResolvedValue(20);
 
       mockPrisma.event.groupBy
-        .mockResolvedValueOnce([{ category: 'Tech', _count: { id: 5 } }]) // categoryGroups
-        .mockResolvedValueOnce([{ location: 'Nairobi', _count: { id: 3 } }]); // cityGroups
+        .mockResolvedValueOnce([{ category: 'Tech', _count: { id: 5 } }])
+        .mockResolvedValueOnce([{ location: 'Nairobi', _count: { id: 3 } }]);
 
       mockPrisma.user.findMany.mockResolvedValue([
         { institution: 'MIT', suspended: false },
@@ -133,9 +128,9 @@ describe('AdminService', () => {
       expect(result.totalEvents).toBe(10);
       expect(result.approvedEvents).toBe(5);
       expect(result.rejectedEvents).toBe(2);
-      expect(result.approvalRate).toBe(71); // 5/(5+2)*100 = 71
+      expect(result.approvalRate).toBe(71);
       expect(result.totalInstitutions).toBe(2);
-      expect(result.activeInstitutions).toBe(1); // only MIT is not suspended
+      expect(result.activeInstitutions).toBe(1);
       expect(result.totalUsers).toBe(20);
       expect(result.categoryDistribution).toEqual([{ name: 'Tech', value: 5 }]);
       expect(result.topCities).toEqual([{ city: 'Nairobi', count: 3 }]);
@@ -157,7 +152,6 @@ describe('AdminService', () => {
     });
   });
 
-  // ── getUsers ───────────────────────────────────────────────────────────────
   describe('getUsers', () => {
     it('returns users without password field', async () => {
       const user = { id: 'u1', name: 'Alice', email: 'a@t.com', password: 'hash', role: 'citizen', createdAt: new Date() };
@@ -169,7 +163,6 @@ describe('AdminService', () => {
     });
   });
 
-  // ── suspendInstitution / unsuspendInstitution ──────────────────────────────
   describe('suspendInstitution', () => {
     it('sets suspended = true for all institution admins', async () => {
       mockPrisma.user.updateMany.mockResolvedValue({ count: 1 });

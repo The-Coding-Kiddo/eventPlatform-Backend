@@ -65,7 +65,7 @@ export class NotificationsService {
           {
             userId: null,
             forRole: role,
-            ...(role === 'institution_admin'
+            ...(role === 'institution'
               ? { OR: [{ forInstitution: null }, { forInstitution: institution }] }
               : role === 'citizen'
               ? { OR: [{ forCategory: null }, { forCategory: { in: subs } }] }
@@ -102,7 +102,7 @@ export class NotificationsService {
           {
             userId: null,
             forRole: role,
-            ...(role === 'institution_admin'
+            ...(role === 'institution'
               ? { OR: [{ forInstitution: null }, { forInstitution: institution }] }
               : role === 'citizen'
               ? { OR: [{ forCategory: null }, { forCategory: { in: subs } }] }

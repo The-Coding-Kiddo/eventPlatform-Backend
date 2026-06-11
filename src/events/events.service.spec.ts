@@ -98,21 +98,21 @@ describe('EventsService', () => {
   });
 
   describe('updateEvent', () => {
-    it('allows institution_admin to update their own draft event', async () => {
+    it('allows institution to update their own draft event', async () => {
       mockPrisma.event.findUnique.mockResolvedValue({ ...mockEvent, status: 'draft' });
       mockPrisma.event.update.mockResolvedValue({ ...mockEvent, title: 'Updated' });
-      const result = await service.updateEvent('event-1', { title: 'Updated' }, 'University A', 'institution_admin');
+      const result = await service.updateEvent('event-1', { title: 'Updated' }, 'University A', 'institution');
       expect(result.title).toBe('Updated');
     });
 
     it('throws ForbiddenException when admin edits another institution event', async () => {
       mockPrisma.event.findUnique.mockResolvedValue(mockEvent);
-      await expect(service.updateEvent('event-1', {}, 'University B', 'institution_admin')).rejects.toThrow(ForbiddenException);
+      await expect(service.updateEvent('event-1', {}, 'University B', 'institution')).rejects.toThrow(ForbiddenException);
     });
 
     it('throws ForbiddenException when admin edits an approved event', async () => {
       mockPrisma.event.findUnique.mockResolvedValue({ ...mockEvent, status: 'approved' });
-      await expect(service.updateEvent('event-1', {}, 'University A', 'institution_admin')).rejects.toThrow(ForbiddenException);
+      await expect(service.updateEvent('event-1', {}, 'University A', 'institution')).rejects.toThrow(ForbiddenException);
     });
 
     it('allows super_admin to edit any approved event', async () => {
@@ -125,12 +125,12 @@ describe('EventsService', () => {
   describe('deleteEvent', () => {
     it('throws NotFoundException when event not found', async () => {
       mockPrisma.event.findUnique.mockResolvedValue(null);
-      await expect(service.deleteEvent('bad-id', 'University A', 'institution_admin')).rejects.toThrow(NotFoundException);
+      await expect(service.deleteEvent('bad-id', 'University A', 'institution')).rejects.toThrow(NotFoundException);
     });
 
     it('throws ForbiddenException when deleting another institution event', async () => {
       mockPrisma.event.findUnique.mockResolvedValue({ ...mockEvent, status: 'draft' });
-      await expect(service.deleteEvent('event-1', 'University B', 'institution_admin')).rejects.toThrow(ForbiddenException);
+      await expect(service.deleteEvent('event-1', 'University B', 'institution')).rejects.toThrow(ForbiddenException);
     });
 
     it('allows super_admin to delete any event', async () => {
@@ -261,13 +261,13 @@ describe('EventsService', () => {
   describe('getAttendees', () => {
     it('returns attendees for own institution admin', async () => {
       mockPrisma.event.findUnique.mockResolvedValue({ institution: 'University A', registeredUsers: [{ id: 'u1' }] });
-      const result = await service.getAttendees('event-1', 'University A', 'institution_admin');
+      const result = await service.getAttendees('event-1', 'University A', 'institution');
       expect(result).toHaveLength(1);
     });
 
     it('throws ForbiddenException for wrong institution', async () => {
       mockPrisma.event.findUnique.mockResolvedValue({ institution: 'University A', registeredUsers: [] });
-      await expect(service.getAttendees('event-1', 'University B', 'institution_admin')).rejects.toThrow(ForbiddenException);
+      await expect(service.getAttendees('event-1', 'University B', 'institution')).rejects.toThrow(ForbiddenException);
     });
   });
 });

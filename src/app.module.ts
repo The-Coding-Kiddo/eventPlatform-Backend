@@ -5,7 +5,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { EventsModule } from './events/events.module';
 import { UsersModule } from './users/users.module';
-import { AdminModule } from './admin/admin.module';
+import { InstitutionModule } from './institution/institution.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { HealthModule } from './health/health.module';
 import { AuditModule } from './audit/audit.module';
@@ -25,7 +25,7 @@ import { APP_GUARD } from '@nestjs/core';
     AuthModule,
     EventsModule,
     UsersModule,
-    AdminModule,
+    InstitutionModule,
     NotificationsModule,
     HealthModule,
     AuditModule,

@@ -1,10 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { AdminController } from './admin.controller';
-import { AdminService } from './admin.service';
+import { InstitutionController } from './institution.controller';
+import { InstitutionService } from './institution.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 
-const mockAdminService = {
+const mockInstitutionService = {
   getModerationQueue: jest.fn(),
   approveEventInQueue: jest.fn(),
   rejectEventInQueue: jest.fn(),
@@ -17,13 +17,13 @@ const mockAdminService = {
   updateEventStatus: jest.fn(),
 };
 
-describe('AdminController', () => {
-  let controller: AdminController;
+describe('InstitutionController', () => {
+  let controller: InstitutionController;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      controllers: [AdminController],
-      providers: [{ provide: AdminService, useValue: mockAdminService }],
+      controllers: [InstitutionController],
+      providers: [{ provide: InstitutionService, useValue: mockInstitutionService }],
     })
       .overrideGuard(JwtAuthGuard)
       .useValue({ canActivate: () => true })
@@ -31,7 +31,7 @@ describe('AdminController', () => {
       .useValue({ canActivate: () => true })
       .compile();
 
-    controller = module.get<AdminController>(AdminController);
+    controller = module.get<InstitutionController>(InstitutionController);
   });
 
   it('should be defined', () => {

@@ -129,8 +129,8 @@ describe('AuthService', () => {
       );
     });
 
-    it('includes institution in JWT payload for institution_admin', async () => {
-      const adminUser = { ...baseUser, role: 'institution_admin' as const, institution: 'MIT' };
+    it('includes institution in JWT payload for institution', async () => {
+      const adminUser = { ...baseUser, role: 'institution' as const, institution: 'MIT' };
       mockPrisma.user.findUnique.mockResolvedValue(adminUser);
       jest.spyOn(bcrypt, 'compare').mockResolvedValue(true as never);
 
@@ -162,16 +162,16 @@ describe('AuthService', () => {
 
   // ── provision ──────────────────────────────────────────────────────────────
   describe('provision', () => {
-    it('creates an institution_admin account', async () => {
+    it('creates an institution account', async () => {
       mockPrisma.user.findUnique.mockResolvedValue(null);
-      const adminUser = { ...baseUser, role: 'institution_admin' as const, institution: 'MIT' };
+      const adminUser = { ...baseUser, role: 'institution' as const, institution: 'MIT' };
       mockPrisma.user.create.mockResolvedValue(adminUser);
 
       const result = await service.provision('Bob', 'bob@mit.com', 'pass', 'MIT');
 
       expect(mockPrisma.user.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ role: 'institution_admin', institution: 'MIT' }),
+          data: expect.objectContaining({ role: 'institution', institution: 'MIT' }),
         }),
       );
       expect(result.user).not.toHaveProperty('password');

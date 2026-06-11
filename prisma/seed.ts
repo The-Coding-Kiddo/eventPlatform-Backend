@@ -23,7 +23,7 @@ async function main() {
     },
   });
 
-  // 2. Create Institution Admin
+  // 2. Create Institution
   await prisma.user.upsert({
     where: { email: 'admin@demo.com' },
     update: {},
@@ -31,7 +31,7 @@ async function main() {
       email: 'admin@demo.com',
       name: 'TechVision Admin',
       password: hashedPassword,
-      role: 'institution_admin',
+      role: 'institution',
       institution: 'TechVision Institute',
     },
   });
