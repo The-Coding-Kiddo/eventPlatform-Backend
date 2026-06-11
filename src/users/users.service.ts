@@ -18,14 +18,25 @@ export class UsersService {
     return { subscriptions: categories };
   }
 
-  async updateProfile(userId: string, data: { name?: string }) {
-    if (!data.name || !data.name.trim()) {
+  async updateProfile(userId: string, data: { name?: string; email?: string; bio?: string }) {
+    if (data.name !== undefined && (!data.name || !data.name.trim())) {
       throw new BadRequestException('Name cannot be empty');
     }
+    if (data.email !== undefined) {
+      const existing = await this.prisma.user.findUnique({ where: { email: data.email } });
+      if (existing && existing.id !== userId) {
+        throw new BadRequestException('Email is already in use');
+      }
+    }
+    const updateData: Record<string, any> = {};
+    if (data.name !== undefined) updateData.name = data.name.trim();
+    if (data.email !== undefined) updateData.email = data.email;
+    if (data.bio !== undefined) updateData.bio = data.bio;
+
     const updated = await this.prisma.user.update({
       where: { id: userId },
-      data: { name: data.name.trim() },
-      select: { id: true, name: true, email: true, role: true, institution: true },
+      data: updateData,
+      select: { id: true, name: true, email: true, role: true, institution: true, bio: true, profilePicture: true },
     });
     return { message: 'Profile updated successfully', user: updated };
   }

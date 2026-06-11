@@ -10,16 +10,22 @@ datasource db {
 // USER MODEL
 // ─────────────────────────────────────────────────────────────────
 model User {
-  id               String   @id @default(uuid())
+  id               String    @id @default(uuid())
   name             String   
   email            String   @unique
   password         String   // Hashed securely (not sent to frontend)
   role             Role     @default(citizen)
   institution      String?
+  bio              String?
+  profilePicture   String?
   
   // Relationships (Linking Users to Events)
   savedEvents      Event[]  @relation("SavedEvents")
   registeredEvents Event[]  @relation("RegisteredEvents")
+  
+  // Follow system — citizens follow institutions
+  followers        Follow[] @relation("Followed")
+  following        Follow[] @relation("Follower")
   
   // PostgreSQL supports saving basic arrays directly
   subscriptions    String[]
@@ -31,38 +37,51 @@ model User {
 
 enum Role {
   citizen
-  institution_admin
+  institution
   super_admin
+}
+
+// ── Follow: citizens follow institutions ──
+model Follow {
+  id         String   @id @default(uuid())
+  followerId String
+  followedId String
+  createdAt  DateTime @default(now())
+
+  follower   User     @relation("Follower", fields: [followerId], references: [id])
+  followed   User     @relation("Followed", fields: [followedId], references: [id])
+
+  @@unique([followerId, followedId])
 }
 
 // ─────────────────────────────────────────────────────────────────
 // EVENT MODEL
 // ─────────────────────────────────────────────────────────────────
 model Event {
-  id               String      @id @default(uuid())
-  title            String
-  category         String
-  date             String     
-  time             String      
-  location         String
-  venue            String
-  institution      String      
-  description      String      @db.Text // Text type for longer content
-  price            Float       @default(0)
-  capacity         Int
-  attendees        Int         @default(0)
-  waitlist         String[]    @default([])
-  checkedInUsers   String[]    @default([])
-  tags             String[]
-  image            String?     
-  status           EventStatus @default(draft)
-  
-  // Inverse relationships back to the User table
-  savedByUsers     User[]      @relation("SavedEvents")
-  registeredUsers  User[]      @relation("RegisteredEvents")
+  id              String      @id @default(uuid())
+  title           String
+  category        String
+  date            String
+  time            String
+  location        String
+  venue           String
+  institution     String      // Name of the institution hosting the event
+  description     String
+  price           Float       @default(0)
+  capacity        Int
+  attendees       Int         @default(0)
+  tags            String[]
+  image           String?
+  status          EventStatus @default(draft)
+  checkedInUsers  String[]    @default([])
+  waitlist        String[]    @default([])
 
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
+  // Relationships
+  registeredUsers User[]      @relation("RegisteredEvents")
+  savedBy         User[]      @relation("SavedEvents")
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 }
 
 enum EventStatus {
@@ -77,18 +96,15 @@ enum EventStatus {
 // ─────────────────────────────────────────────────────────────────
 model Notification {
   id             String   @id @default(uuid())
-  type           String   // e.g. new_event | event_approved | event_rejected | subscription
+  type           String
   title          String
   message        String
   read           Boolean  @default(false)
-
-  // Optional target scoping — all null = broadcast to everyone
-  userId         String?  // target a specific user
-  forRole        String?  // target all users of a role
-  forCategory    String?  // target citizens subscribed to this category
-  forInstitution String?  // target admins of this institution
-  eventId        String?  // reference to related event (optional)
-
+  userId         String?
+  forRole        String?
+  forCategory    String?
+  forInstitution String?
+  eventId        String?
   createdAt      DateTime @default(now())
 }
 
@@ -100,8 +116,8 @@ model AuditLog {
   userId    String
   userEmail String
   userRole  String
-  action    String   // e.g. APPROVE_EVENT | REJECT_EVENT | SUBMIT_EVENT | UPDATE_EVENT
-  targetId  String?  // ID of the target resource (like eventId)
-  details   String?  @db.Text
+  action    String
+  targetId  String?
+  details   String?
   createdAt DateTime @default(now())
 }

@@ -11,6 +11,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { JwtPayload } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/user.decorator';
 import { UpdateSubscriptionsDto } from '../events/dto/update-subscriptions.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 
 @ApiTags('Users')
@@ -30,16 +31,15 @@ export class UsersController {
     return this.usersService.updateSubscriptions(user.sub, body.categories);
   }
 
-  @ApiOperation({ summary: 'Update own profile (name)' })
-  @ApiBody({ schema: { example: { name: 'Jane Doe' } } })
+  @ApiOperation({ summary: 'Update own profile (name, email)' })
   @UseGuards(JwtAuthGuard)
   @Patch('profile')
   async updateProfile(
-    @Body() body: { name: string },
+    @Body() body: UpdateProfileDto,
     @CurrentUser() user?: JwtPayload,
   ) {
     if (!user) throw new ForbiddenException('User session not found.');
-    return this.usersService.updateProfile(user.sub, { name: body.name });
+    return this.usersService.updateProfile(user.sub, body);
   }
 
   @ApiOperation({ summary: 'Change own password' })
