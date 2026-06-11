@@ -18,4 +18,9 @@ export class UpdateProfileDto {
   @IsString()
   @MaxLength(500)
   bio?: string;
+
+  @ApiPropertyOptional({ description: 'Profile picture URL' })
+  @IsOptional()
+  @IsString()
+  profilePicture?: string;
 }

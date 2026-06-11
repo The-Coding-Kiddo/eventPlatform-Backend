@@ -35,7 +35,7 @@ export class InstitutionProfileController {
 
   @ApiOperation({ summary: 'Get public institution profile' })
   @Get(':id')
-  async getProfile(@Param('id') id: string) {
+  async getProfile(@Param('id') id: string, @CurrentUser() currentUser?: JwtPayload) {
     const user = await this.prisma.user.findUnique({
       where: { id },
       select: {
@@ -49,6 +49,14 @@ export class InstitutionProfileController {
     });
     if (!user) throw new NotFoundException('Institution not found');
 
+    let isFollowing = false;
+    if (currentUser) {
+      const follow = await this.prisma.follow.findUnique({
+        where: { followerId_followedId: { followerId: currentUser.sub, followedId: id } },
+      });
+      isFollowing = !!follow;
+    }
+
     return {
       id: user.id,
       name: user.name,
@@ -56,6 +64,7 @@ export class InstitutionProfileController {
       bio: user.bio,
       profilePicture: user.profilePicture,
       followerCount: user._count.followers,
+      isFollowing,
     };
   }
 

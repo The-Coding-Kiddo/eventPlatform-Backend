@@ -18,7 +18,7 @@ export class UsersService {
     return { subscriptions: categories };
   }
 
-  async updateProfile(userId: string, data: { name?: string; email?: string; bio?: string }) {
+  async updateProfile(userId: string, data: { name?: string; email?: string; bio?: string; profilePicture?: string }) {
     if (data.name !== undefined && (!data.name || !data.name.trim())) {
       throw new BadRequestException('Name cannot be empty');
     }
@@ -32,6 +32,7 @@ export class UsersService {
     if (data.name !== undefined) updateData.name = data.name.trim();
     if (data.email !== undefined) updateData.email = data.email;
     if (data.bio !== undefined) updateData.bio = data.bio;
+    if (data.profilePicture !== undefined) updateData.profilePicture = data.profilePicture;
 
     const updated = await this.prisma.user.update({
       where: { id: userId },

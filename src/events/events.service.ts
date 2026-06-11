@@ -17,7 +17,7 @@ export class EventsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getPublicEvents(filters: any = {}, pagination: PaginationDto = {}) {
-    const { category, city, search, timeframe = 'all', institution } = filters;
+    const { category, city, search, timeframe = 'upcoming', institution } = filters;
     const { skip = 0, take = 10 } = pagination;
     const where: any = { status: 'approved' };
     const now = new Date();

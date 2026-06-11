@@ -3,11 +3,12 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { json, urlencoded } from 'express';
+import express, { json, urlencoded } from 'express';
 import { WinstonModule } from 'nest-winston';
 import { winstonLogger } from './common/logger/winston.config';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { join, resolve } from 'path';
 
 async function bootstrap() {
   // Validate JWT_SECRET at startup
@@ -36,6 +37,8 @@ async function bootstrap() {
 
   app.use(json({ limit: '50mb' }));
   app.use(urlencoded({ extended: true, limit: '50mb' }));
+
+  app.use('/uploads', express.static(resolve('uploads')));
 
   app.useGlobalPipes(
     new ValidationPipe({
