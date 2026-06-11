@@ -51,6 +51,8 @@ model Event {
   price            Float       @default(0)
   capacity         Int
   attendees        Int         @default(0)
+  waitlist         String[]    @default([])
+  checkedInUsers   String[]    @default([])
   tags             String[]
   image            String?     
   status           EventStatus @default(draft)
