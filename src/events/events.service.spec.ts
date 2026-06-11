@@ -144,8 +144,9 @@ describe('EventsService', () => {
   describe('registerForEvent', () => {
     const makeTx = (overrides: any = {}) => ({
       event: {
-        findUnique: jest.fn().mockResolvedValue({ id: 'event-1', capacity: 100, attendees: 0 }),
+        findUnique: jest.fn().mockResolvedValue({ id: 'event-1', capacity: 100, attendees: 0, waitlist: [] }),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        update: jest.fn().mockResolvedValue({}),
         ...overrides.event,
       },
       user: {
@@ -167,17 +168,82 @@ describe('EventsService', () => {
       await expect(service.registerForEvent('event-1', 'user-1')).rejects.toThrow(BadRequestException);
     });
 
-    it('throws BadRequestException when at capacity', async () => {
-      const tx = makeTx({ event: { findUnique: jest.fn().mockResolvedValue({ id: 'event-1', capacity: 1, attendees: 1 }), updateMany: jest.fn().mockResolvedValue({ count: 0 }) } });
+    it('waitlists the user when capacity is full', async () => {
+      const tx = makeTx({
+        event: {
+          findUnique: jest.fn().mockResolvedValue({ id: 'event-1', capacity: 1, attendees: 1, waitlist: [] }),
+          update: jest.fn().mockResolvedValue({}),
+        },
+      });
       mockPrisma.$transaction.mockImplementation((fn: (tx: any) => Promise<any>) => fn(tx));
-      await expect(service.registerForEvent('event-1', 'user-1')).rejects.toThrow(BadRequestException);
+
+      const result = await service.registerForEvent('event-1', 'user-1');
+
+      expect(result.status).toBe('waitlisted');
+      expect(tx.event.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ waitlist: { set: ['user-1'] } }) }));
+    });
+
+    it('adds the user to the waitlist when capacity is full', async () => {
+      const tx = makeTx({
+        event: {
+          findUnique: jest.fn().mockResolvedValue({ id: 'event-1', capacity: 1, attendees: 1, waitlist: [] }),
+          updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+          update: jest.fn().mockResolvedValue({}),
+        },
+      });
+      mockPrisma.$transaction.mockImplementation((fn: (tx: any) => Promise<any>) => fn(tx));
+
+      const result = await service.registerForEvent('event-1', 'user-1');
+
+      expect(result.status).toBe('waitlisted');
+      expect(tx.event.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ waitlist: { set: ['user-1'] } }) }));
+    });
+  });
+
+  describe('generateTicketQr', () => {
+    it('returns a QR payload for a registered attendee', async () => {
+      mockPrisma.event.findUnique.mockResolvedValue({ id: 'event-1', institution: 'University A', registeredUsers: [{ id: 'user-1' }] });
+
+      const result = await service.generateTicketQr('event-1', 'user-1');
+
+      const decoded = JSON.parse(Buffer.from(result.qrData, 'base64url').toString('utf8'));
+      expect(decoded.eventId).toBe('event-1');
+      expect(decoded.userId).toBe('user-1');
+      expect(result.ticketCode).toBeDefined();
+    });
+  });
+
+  describe('checkInAttendee', () => {
+    it('marks a registered attendee as checked in', async () => {
+      const tx = {
+        event: {
+          findUnique: jest.fn().mockResolvedValue({
+            id: 'event-1',
+            checkedInUsers: [],
+            registeredUsers: [{ id: 'user-1' }],
+          }),
+          update: jest.fn().mockResolvedValue({}),
+        },
+        user: {
+          findUnique: jest.fn().mockResolvedValue({ registeredEvents: [{ id: 'event-1' }] }),
+        },
+      };
+      mockPrisma.$transaction.mockImplementation((fn: (tx: any) => Promise<any>) => fn(tx));
+
+      const result = await service.checkInAttendee('event-1', 'user-1', 'any-code');
+
+      expect(result.success).toBe(true);
+      expect(tx.event.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ checkedInUsers: { set: ['user-1'] } }) }));
     });
   });
 
   describe('cancelRegistration', () => {
     it('cancels and decrements attendees', async () => {
       mockPrisma.$transaction.mockImplementation((fn: (tx: any) => Promise<any>) => fn({
-        event: { update: jest.fn().mockResolvedValue({}) },
+        event: {
+          findUnique: jest.fn().mockResolvedValue({ waitlist: [] }),
+          update: jest.fn().mockResolvedValue({}),
+        },
         user: { findUnique: jest.fn().mockResolvedValue({ registeredEvents: [{ id: 'event-1' }] }), update: jest.fn().mockResolvedValue({}) },
       }));
       const result = await service.cancelRegistration('event-1', 'user-1');

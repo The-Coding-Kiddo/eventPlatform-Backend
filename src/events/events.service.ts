@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
@@ -172,10 +173,14 @@ export class EventsService {
 
   async registerForEvent(eventId: string, userId: string) {
     return this.prisma.$transaction(async (tx) => {
-      // 1. Check if event exists and get capacity
       const event = await tx.event.findUnique({
         where: { id: eventId },
-        select: { id: true, capacity: true, attendees: true },
+        select: {
+          id: true,
+          capacity: true,
+          attendees: true,
+          waitlist: true,
+        },
       });
 
       if (!event) throw new NotFoundException('Event not found');
@@ -195,37 +200,65 @@ export class EventsService {
         throw new BadRequestException('You are already registered for this event');
       }
 
-      // 3. Atomic update: increment attendees ONLY if below capacity
-      // Using updateMany because it allows filtering by non-unique fields (attendees < capacity)
-      const updateResult = await tx.event.updateMany({
-        where: {
-          id: eventId,
-          attendees: { lt: event.capacity },
-        },
-        data: {
-          attendees: { increment: 1 },
-        },
-      });
+      const waitlist = event.waitlist ?? [];
+      const hasRoom = event.attendees < event.capacity;
 
-      if (updateResult.count === 0) {
-        throw new BadRequestException('Event is at capacity');
+      if (hasRoom) {
+        await tx.event.update({
+          where: { id: eventId },
+          data: { attendees: { increment: 1 } },
+        });
+
+        await tx.user.update({
+          where: { id: userId },
+          data: { registeredEvents: { connect: { id: eventId } } },
+        });
+
+        return { success: true, status: 'registered' };
       }
 
-      // 4. Connect the user to the event
-      await tx.user.update({
-        where: { id: userId },
-        data: { registeredEvents: { connect: { id: eventId } } },
-      });
+      if (!waitlist.includes(userId)) {
+        await tx.event.update({
+          where: { id: eventId },
+          data: { waitlist: { set: [...waitlist, userId] } },
+        });
+      }
 
-      return { success: true };
+      return { success: true, status: 'waitlisted' };
     });
   }
 
-  async cancelRegistration(eventId: string, userId: string) {
+  async cancelRegistration(eventId: string, targetUserId: string, callerId?: string) {
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true, institution: true, waitlist: true },
+    });
+
+    if (!event) throw new NotFoundException('Event not found');
+
+    // Permission check for admins cancelling others
+    if (callerId && callerId !== targetUserId) {
+      const caller = await this.prisma.user.findUnique({
+        where: { id: callerId },
+        select: { role: true, institution: true },
+      });
+      if (!caller) throw new ForbiddenException('Caller session not found');
+
+      const isAllowed =
+        caller.role === 'super_admin' ||
+        (caller.role === 'institution_admin' &&
+          caller.institution === event.institution);
+      if (!isAllowed) {
+        throw new ForbiddenException(
+          'You do not have permission to cancel this registration',
+        );
+      }
+    }
+
     return this.prisma.$transaction(async (tx) => {
-      // 1. Check if user is actually registered
+      // 1. Check if user is registered or waitlisted
       const user = await tx.user.findUnique({
-        where: { id: userId },
+        where: { id: targetUserId },
         select: {
           registeredEvents: {
             where: { id: eventId },
@@ -234,23 +267,180 @@ export class EventsService {
         },
       });
 
-      if (!user?.registeredEvents.length) {
-        throw new BadRequestException('You are not registered for this event');
+      const isRegistered = (user?.registeredEvents?.length ?? 0) > 0;
+      const waitlist = event.waitlist ?? [];
+      const isWaitlisted = waitlist.includes(targetUserId);
+
+      if (!isRegistered && !isWaitlisted) {
+        throw new BadRequestException('User is not registered or waitlisted for this event');
       }
 
-      // 2. Atomic decrement
+      // Handle Waitlist Cancellation
+      if (isWaitlisted) {
+        await tx.event.update({
+          where: { id: eventId },
+          data: {
+            waitlist: { set: waitlist.filter((id) => id !== targetUserId) },
+          },
+        });
+        return { success: true, message: 'Removed from waitlist' };
+      }
+
+      // Handle Active Registration Cancellation
       await tx.event.update({
         where: { id: eventId },
         data: { attendees: { decrement: 1 } },
       });
 
-      // 3. Disconnect
       await tx.user.update({
-        where: { id: userId },
+        where: { id: targetUserId },
         data: { registeredEvents: { disconnect: { id: eventId } } },
       });
 
+      // Promote next from waitlist if any
+      if (waitlist.length) {
+        const nextUserId = waitlist[0];
+        await tx.event.update({
+          where: { id: eventId },
+          data: {
+            waitlist: { set: waitlist.slice(1) },
+            attendees: { increment: 1 },
+          },
+        });
+        await tx.user.update({
+          where: { id: nextUserId },
+          data: { registeredEvents: { connect: { id: eventId } } },
+        });
+
+        return { success: true, promotedFromWaitlist: nextUserId };
+      }
+
       return { success: true };
+    });
+  }
+
+  async generateTicketQr(eventId: string, userId: string) {
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        id: true,
+        institution: true,
+        registeredUsers: {
+          where: { id: userId },
+          select: { id: true },
+        },
+      },
+    });
+
+    if (!event) throw new NotFoundException('Event not found');
+    if (!event.registeredUsers?.length) {
+      throw new BadRequestException('User is not registered for this event');
+    }
+
+    const ticketCode = createHash('sha256')
+      .update(`${eventId}:${userId}:${process.env.QR_SECRET ?? 'event-platform-qr'}`)
+      .digest('hex')
+      .slice(0, 18);
+
+    const payload = {
+      eventId,
+      userId,
+      ticketCode,
+      issuedAt: new Date().toISOString(),
+    };
+
+    return {
+      eventId,
+      userId,
+      ticketCode,
+      qrData: Buffer.from(JSON.stringify(payload)).toString('base64url'),
+    };
+  }
+
+  async checkInAttendee(eventId: string, callerId: string, qrData?: string) {
+    let targetUserId = callerId;
+    let isManualBypass = false;
+
+    if (qrData) {
+      try {
+        const decoded = Buffer.from(
+          qrData,
+          qrData.includes('-') || qrData.includes('_') ? 'base64url' : 'base64',
+        ).toString('utf8');
+        const payload = JSON.parse(decoded);
+
+        if (payload.userId) {
+          targetUserId = payload.userId;
+        }
+
+        if (payload.manual) {
+          isManualBypass = true;
+        }
+
+        if (!isManualBypass && payload.ticketCode) {
+          const expectedTicketCode = createHash('sha256')
+            .update(
+              `${eventId}:${targetUserId}:${process.env.QR_SECRET ?? 'event-platform-qr'}`,
+            )
+            .digest('hex')
+            .slice(0, 18);
+
+          if (payload.ticketCode !== expectedTicketCode) {
+            throw new BadRequestException('Invalid QR ticket code');
+          }
+        }
+      } catch (err) {
+        if (err instanceof BadRequestException) throw err;
+      }
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const event = await tx.event.findUnique({
+        where: { id: eventId },
+        select: {
+          id: true,
+          checkedInUsers: true,
+          institution: true,
+          registeredUsers: {
+            where: { id: targetUserId },
+            select: { id: true },
+          },
+        },
+      });
+
+      if (!event) throw new NotFoundException('Event not found');
+
+      if (!event.registeredUsers?.length) {
+        throw new BadRequestException('User is not registered for this event');
+      }
+
+      if (callerId !== targetUserId) {
+        const caller = await tx.user.findUnique({
+          where: { id: callerId },
+          select: { role: true, institution: true },
+        });
+        if (!caller) throw new ForbiddenException('Caller session not found');
+
+        const isAllowed =
+          caller.role === 'super_admin' ||
+          (caller.role === 'institution_admin' &&
+            caller.institution === event.institution);
+        if (!isAllowed) {
+          throw new ForbiddenException(
+            'You do not have permission to check in this user',
+          );
+        }
+      }
+
+      const checkedInUsers = event.checkedInUsers ?? [];
+      if (!checkedInUsers.includes(targetUserId)) {
+        await tx.event.update({
+          where: { id: eventId },
+          data: { checkedInUsers: { set: [...checkedInUsers, targetUserId] } },
+        });
+      }
+
+      return { success: true, checkedIn: true, userId: targetUserId };
     });
   }
 
@@ -258,7 +448,10 @@ export class EventsService {
     const event = await this.prisma.event.findUnique({
       where: { id },
       select: {
+        id: true,
         institution: true,
+        waitlist: true,
+        checkedInUsers: true,
         registeredUsers: {
           select: {
             id: true,
@@ -275,10 +468,47 @@ export class EventsService {
 
     // Security: Only allow if super_admin OR if it's the admin's own institution
     if (role !== 'super_admin' && event.institution !== institution) {
-      throw new ForbiddenException('You do not have permission to view attendees for this event.');
+      throw new ForbiddenException(
+        'You do not have permission to view attendees for this event.',
+      );
     }
 
-    return event.registeredUsers;
+    const checkedInIds = event.checkedInUsers ?? [];
+
+    // 1. Map registered users with 'registered' status
+    const registered = event.registeredUsers.map((u) => ({
+      ...u,
+      status: 'registered',
+      checkedIn: checkedInIds.includes(u.id),
+    }));
+
+    // 2. Fetch waitlisted users details
+    let waitlisted: any[] = [];
+    if (event.waitlist && event.waitlist.length > 0) {
+      const waitlistUsers = await this.prisma.user.findMany({
+        where: { id: { in: event.waitlist } },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          createdAt: true,
+        },
+      });
+
+      // Sort according to the order in the waitlist array
+      waitlisted = event.waitlist
+        .map((userId) => waitlistUsers.find((u) => u.id === userId))
+        .filter(Boolean)
+        .map((u) => ({
+          ...u,
+          status: 'waitlisted',
+          checkedIn: false, // Waitlisted people can't be checked in
+        }));
+    }
+
+    // Return unified list
+    return [...registered, ...waitlisted];
   }
 
   async inviteAttendee(
