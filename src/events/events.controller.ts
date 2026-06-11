@@ -214,6 +214,29 @@ export class EventsController {
   }
 
   @ApiBearerAuth()
+  @ApiOperation({ summary: 'Generate a QR ticket for an attendee' })
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/qr')
+  async generateTicketQr(
+    @Param('id') id: string,
+    @CurrentUser() user?: JwtPayload,
+  ) {
+    return this.eventsService.generateTicketQr(id, this.getUserId(user));
+  }
+
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Check in an attendee using a QR ticket' })
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/check-in')
+  async checkInAttendee(
+    @Param('id') id: string,
+    @Body('qrData') qrData?: string,
+    @CurrentUser() user?: JwtPayload,
+  ) {
+    return this.eventsService.checkInAttendee(id, this.getUserId(user), qrData);
+  }
+
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Register for an event' })
   @UseGuards(JwtAuthGuard)
   @Post(':id/register')
@@ -230,9 +253,12 @@ export class EventsController {
   @Delete(':id/register')
   async cancelRegistration(
     @Param('id') id: string,
+    @Query('userId') targetUserId?: string,
     @CurrentUser() user?: JwtPayload,
   ) {
-    return this.eventsService.cancelRegistration(id, this.getUserId(user));
+    const callerId = this.getUserId(user);
+    // If targetUserId is not provided, use the callerId (self-cancellation)
+    return this.eventsService.cancelRegistration(id, targetUserId || callerId, callerId);
   }
 
   @ApiBearerAuth()
